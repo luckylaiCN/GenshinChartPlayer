@@ -9,7 +9,7 @@ from chart.utils import (
 )
 from chart.note import (
     BasicNote,
-    ContinueNote,
+    ContinuousNote,
     SingleNote,
     ChordBuilder,
     TupletBuilder,
@@ -29,13 +29,18 @@ class BeatParseError(Exception):
 
 class Beat:
     """A class representing a beat in the chart.
-    
+
     Attributes:
     notes: A list of BeatUnit objects representing the notes in the beat.
     raw_text: The raw text of the beat.
+    line_number: int | None , available when parsing a full chart
+    position: int | None , position in line, available when parsing a full chart
     """
+
     notes: list[BeatUnit]
     raw_text: str
+    line_number: int | None  # available when parsing a full chart
+    position: int | None  # position in line, available when parsing a full chart
 
     def __init__(self, raw_text: str) -> None:
         self.raw_text = raw_text
@@ -49,14 +54,31 @@ class Beat:
 
     def __repr__(self) -> str:
         return f"Beat(raw_text={self.raw_text!r}, notes={self.notes!r})"
+
+    def set_position(self, line_number: int, position: int) -> None:
+        self.line_number = line_number
+        self.position = position
+
+    @property
+    def begin_str(self) -> str | None:
+        if self.line_number is not None and self.position is not None:
+            return f"{self.line_number}.{self.position}"  # tkinter text position format
+        return None
     
+    @property
+    def end_str(self) -> str | None:
+        if self.line_number is not None and self.position is not None:
+            end_pos = self.position + len(self.raw_text)
+            return f"{self.line_number}.{end_pos}"  # tkinter text position format
+        return None
+
     @staticmethod
     def from_string(beat_str: str) -> "Beat":
         beat = Beat(beat_str)
-        beat.serialize()
+        beat.parse()
         return beat
 
-    def serialize(self) -> None:
+    def parse(self) -> None:
         builder_stack: list[MutiNoteBuilder] = []
         bracket_stack: list[BracketTokenLeft] = []
         notes: list[BeatUnit] = []
@@ -101,7 +123,7 @@ class Beat:
                 if is_keyboard_key(char):
                     note = SingleNote(keyboard_to_token(char))  # type: ignore
                 elif char == "_":
-                    note = ContinueNote()
+                    note = ContinuousNote()
                 elif char == " ":
                     note = " "
                 else:
@@ -114,6 +136,8 @@ class Beat:
                     notes.append(note)
 
         if bracket_stack:
-            raise BeatParseError("Unclosed brackets at end of beat", len(self.raw_text) - 1)
+            raise BeatParseError(
+                "Unclosed brackets at end of beat", len(self.raw_text) - 1
+            )
 
         self.set_notes(notes)

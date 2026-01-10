@@ -19,6 +19,7 @@ class ParseErrorInfo:
     position: The position in the line where the error occurred.
     message: The error message.
     """
+
     line_number: int
     position: int
     message: str
@@ -39,18 +40,20 @@ class ChartParseException(Exception):
     errors: list[ParseErrorInfo]
 
     def __init__(self, errors: list[ParseErrorInfo]) -> None:
-        super().__init__("Multiple serialization errors occurred.")
+        super().__init__("Multiple parsing errors occurred.")
         self.errors = errors
 
 
 class Line(ABC):
     """
     An abstract base class for chart lines.
-    
+
     Attributes:
     raw_text: The raw text of the line.
     """
+
     raw_text: str
+    line_number: int | None  # available when parsing a full chart
 
     def __init__(self, raw_text: str) -> None:
         self.raw_text = raw_text
@@ -63,9 +66,13 @@ class Line(ABC):
     def __repr__(self) -> str:
         pass
 
+    def set_line_number(self, line_number: int) -> None:
+        self.line_number = line_number
+
 
 class TextLine(Line):
     """A class representing a text line in the chart."""
+
     def __str__(self) -> str:
         return self.raw_text
 
@@ -75,6 +82,7 @@ class TextLine(Line):
 
 class BeatLine(Line):
     """A class representing a beat line in the chart."""
+
     beats: list[Beat]
     raw_text: str
 
@@ -86,7 +94,9 @@ class BeatLine(Line):
         self.beats = beats
 
     def serialize(self) -> None:
-        beat_strs = self.raw_text.split("/")
+        beat_strs = self.raw_text.rstrip().split("/")
+        if beat_strs[-1] == "":
+            beat_strs = beat_strs[:-1]
         begin_index = 0
         beats: list[Beat] = []
         for beat_str in beat_strs:
@@ -105,6 +115,15 @@ class BeatLine(Line):
         beat_line = BeatLine(beat_line_str)
         beat_line.serialize()
         return beat_line
+    
+    def set_beat_positions(self) -> None:
+        """Set the line number and position for each beat in the beat line."""
+        if self.line_number is None:
+            return
+        begin_index = 0
+        for beat in self.beats:
+            beat.set_position(self.line_number, begin_index)
+            begin_index += len(beat.raw_text) + 1  # +1 for the '/' character
 
     def __str__(self) -> str:
         return self.raw_text
@@ -115,6 +134,7 @@ class BeatLine(Line):
 
 class CommandLine(Line):
     """A class representing a command line in the chart."""
+
     command: str
     args: list[str]
 
@@ -142,14 +162,17 @@ class CommandLine(Line):
         return f"CommandLine(raw_text={self.raw_text!r})"
 
 
-def parse_line(line_str: str) -> Line:
+def parse_line(line_str: str, line_number: int) -> Line:
     """Parse a line string into a Line object."""
+    result_line: Line
     if is_command_line(line_str):
-        return CommandLine.from_string(line_str)
+        result_line = CommandLine.from_string(line_str)
     elif is_beat_line(line_str):
-        return BeatLine.from_string(line_str)
+        result_line = BeatLine.from_string(line_str)
     else:
-        return TextLine(line_str)
+        result_line = TextLine(line_str)
+    result_line.set_line_number(line_number)
+    return result_line
 
 
 def parse_chart(chart_str: str) -> list[Line]:
@@ -159,7 +182,7 @@ def parse_chart(chart_str: str) -> list[Line]:
     exception_list: list[ParseErrorInfo] = []
     for line_number, line_str in enumerate(line_strs, start=1):
         try:
-            line = parse_line(line_str)
+            line = parse_line(line_str, line_number)
             lines.append(line)
         except ParseError as e:
             exception_list.append(

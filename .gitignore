@@ -17,3 +17,6 @@ test.py
 
 # development requirements
 dev-requirements.txt
+
+# 3rd-party assets
+audio/

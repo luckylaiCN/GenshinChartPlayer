@@ -36,11 +36,11 @@ class BasicNote(ABC):
         pass
 
 
-class ContinueNote(BasicNote):
+class ContinuousNote(BasicNote):
     """A class representing a continue chart note."""
 
     def __eq__(self, value: object) -> bool:
-        return isinstance(value, ContinueNote)
+        return isinstance(value, ContinuousNote)
 
     def __str__(self) -> str:
         return CONTINUE_TOKEN
@@ -52,8 +52,8 @@ class ContinueNote(BasicNote):
         # greater than any notes
         return True
 
-    def copy(self) -> "ContinueNote":
-        return ContinueNote()
+    def copy(self) -> "ContinuousNote":
+        return ContinuousNote()
 
     def __hash__(self) -> int:
         return hash("ContinueNote")
@@ -77,12 +77,16 @@ class SingleNote(BasicNote):
 
     def __str__(self) -> str:
         return token_to_keyboard(self.token) or ""
+    
+    @property
+    def keyboard(self) -> str | None:
+        return token_to_keyboard(self.token)
 
     def __repr__(self) -> str:
         return f"SingleNote(token={self.token})"
 
     def __gt__(self, value: object) -> bool:
-        if isinstance(value, ContinueNote):
+        if isinstance(value, ContinuousNote):
             return False
         if isinstance(value, SingleNote):
             return token_to_index(self.token) > token_to_index(value.token)
