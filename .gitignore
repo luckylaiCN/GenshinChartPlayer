@@ -1,0 +1,19 @@
+# virtual environment
+venv/
+
+# development environment
+dev_env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# test files
+test_*.py
+test.py
+
+# chart txt files
+*.txt
+
+# development requirements
+dev-requirements.txt
