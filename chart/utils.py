@@ -11,6 +11,7 @@ from chart.constants import (
     BracketToken,
 )
 
+
 def is_keyboard_key(key: str) -> bool:
     """Check if the given key is a valid keyboard key."""
     return key in KEYBOARD_INDEX_TABLE
@@ -32,6 +33,7 @@ def token_to_keyboard(token: ChartNotation) -> ChartKey | None:
         index = NOTATION_INDEX_TABLE.index(token)
         return KEYBOARD_INDEX_TABLE[index]
     return None
+
 
 def keyboard_to_token(key: ChartKey) -> ChartNotation | None:
     """Convert a keyboard key to its corresponding chart token."""
@@ -93,7 +95,7 @@ def is_bracket_match(left: BracketTokenLeft, right: BracketTokenRight) -> bool:
     }
     return MATCHING[left] == right
 
+
 def is_command_line(line: str) -> bool:
     """Check if the given line is a command line (starts with an @)."""
     return line.startswith("@")
-

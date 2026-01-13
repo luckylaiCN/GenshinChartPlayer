@@ -13,7 +13,7 @@ test_*.py
 test.py
 
 # chart txt files
-*.txt
+chart/*.txt
 
 # development requirements
 dev-requirements.txt

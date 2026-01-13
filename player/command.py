@@ -52,8 +52,10 @@ class CommandRegistry:
     @classmethod
     def get_command_class(cls, name: str) -> type[Command] | None:
         return cls._commands.get(name, None)
-    
-    def execute_command(self, name: str, args: list[str], internal_property: InternalProperty) -> None:
+
+    def execute_command(
+        self, name: str, args: list[str], internal_property: InternalProperty
+    ) -> None:
         command_cls = self.get_command_class(name)
         if command_cls is None:
             raise CommandParseError(f"Unknown command: {name}", -1)
@@ -90,4 +92,4 @@ class CMD_Set(Command):
 default_command_registry = CommandRegistry()
 default_command_registry.register_command(CMD_Set._registered_name, CMD_Set)
 
-command_registry = default_command_registry # exported registry instance
+command_registry = default_command_registry  # exported registry instance

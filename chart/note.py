@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from chart.constants import ChartNotation, CONTINUE_TOKEN
+from chart.constants import ChartNotation, CONTINUE_TOKEN, ChartKey
 from chart.utils import token_to_keyboard, token_to_index
 
 
@@ -77,9 +77,9 @@ class SingleNote(BasicNote):
 
     def __str__(self) -> str:
         return token_to_keyboard(self.token) or ""
-    
+
     @property
-    def keyboard(self) -> str | None:
+    def keyboard(self) -> ChartKey | None:
         return token_to_keyboard(self.token)
 
     def __repr__(self) -> str:

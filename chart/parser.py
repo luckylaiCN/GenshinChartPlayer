@@ -115,7 +115,7 @@ class BeatLine(Line):
         beat_line = BeatLine(beat_line_str)
         beat_line.serialize()
         return beat_line
-    
+
     def set_beat_positions(self) -> None:
         """Set the line number and position for each beat in the beat line."""
         if self.line_number is None:

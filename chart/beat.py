@@ -64,7 +64,7 @@ class Beat:
         if self.line_number is not None and self.position is not None:
             return f"{self.line_number}.{self.position}"  # tkinter text position format
         return None
-    
+
     @property
     def end_str(self) -> str | None:
         if self.line_number is not None and self.position is not None:

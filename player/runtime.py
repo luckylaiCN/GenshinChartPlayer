@@ -18,7 +18,9 @@ class BeatContainer:
     notes: list[NoteContainer]
     begin_time: float = 0.0  # in seconds
 
-    def __init__(self, beat_id: int, notes: list[NoteContainer], begin_time: float = 0.0) -> None:
+    def __init__(
+        self, beat_id: int, notes: list[NoteContainer], begin_time: float = 0.0
+    ) -> None:
         self.beat_id = beat_id
         self.notes = notes
         self.begin_time = begin_time
@@ -106,12 +108,14 @@ class PlayerThreadingPool:
                 self.stop_flag,
             )
             if status:
-                threading.Thread(target=self.beat_handler, args=(beat_container,)).start()
+                threading.Thread(
+                    target=self.beat_handler, args=(beat_container,)
+                ).start()
             self.current_beat_index += 1
 
     def beat_handler(self, beat_container: BeatContainer) -> None:
         status = wait_until_or_cancel(
-            beat_container.begin_time + self.begin_time - 0.5 , self.stop_flag
+            beat_container.begin_time + self.begin_time - 0.5, self.stop_flag
         )
         if status:
             for note_container in beat_container.notes:
@@ -123,11 +127,11 @@ class PlayerThreadingPool:
     def stop(self) -> None:
         self.stop_flag.modify(True)
 
-    def play(self) -> float: # return: the begin time
+    def play(self) -> float:  # return: the begin time
         if len(self.beats) == 0:
             return 0.0
-        self.begin_time = time.time() + 0.5 - self.beats[self.current_beat_index].begin_time
+        self.begin_time = (
+            time.time() + 0.5 - self.beats[self.current_beat_index].begin_time
+        )
         threading.Thread(target=self.play_loop).start()
         return self.begin_time
-    
-    
