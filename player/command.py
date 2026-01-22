@@ -42,6 +42,21 @@ class CommandParseError(Exception):
         self.line_number = line_number
 
 
+class CommandParseErrorInfo:
+    message: str
+    line_number: int
+
+    def __init__(self, message: str, line_number: int) -> None:
+        self.message = message
+        self.line_number = line_number
+
+
+class CommandParseException(Exception):
+    def __init__(self, errors: list[CommandParseErrorInfo]) -> None:
+        super().__init__("Multiple command parse errors occurred.")
+        self.errors = errors
+
+
 class CommandRegistry:
     _commands: dict[str, type[Command]] = {}
 
@@ -78,15 +93,11 @@ class CMD_Set(Command):
                 return bpm_value > 0
             except ValueError:
                 return False
-        if self.args[0] == "ts":
-            return self.args[1] in ("3", "4")
         return False
 
     def execute(self) -> None:
         if self.args[0] == "bpm":
             self.internal_property.bpm = float(self.args[1])
-        elif self.args[0] == "ts":
-            self.internal_property.time_signature = int(self.args[1])  # type: ignore
 
 
 default_command_registry = CommandRegistry()

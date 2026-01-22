@@ -7,8 +7,18 @@ from chart.parser import Line, BeatLine, CommandLine
 # from chart.note import SingleNote
 from player.interal import InternalProperty
 from player.pattern import get_notes_pattern_in_beat, NoteContainer
-from player.command import command_registry
+from player.command import (
+    command_registry,
+    CommandParseError,
+    CommandParseErrorInfo,
+    CommandParseException,
+)
 from player.utils import FlagBoolean, wait_until_or_cancel
+from player.pattern import (
+    PatternMismatchException,
+    PatternMismatchWarning,
+    PatternMismatchInfo,
+)
 
 import threading
 
@@ -17,13 +27,22 @@ class BeatContainer:
     beat_id: int
     notes: list[NoteContainer]
     begin_time: float = 0.0  # in seconds
+    begin_str: str = ""
+    end_str: str = ""
 
     def __init__(
-        self, beat_id: int, notes: list[NoteContainer], begin_time: float = 0.0
+        self,
+        beat_id: int,
+        notes: list[NoteContainer],
+        begin_time: float = 0.0,
+        begin_str: str = "",
+        end_str: str = "",
     ) -> None:
         self.beat_id = beat_id
         self.notes = notes
         self.begin_time = begin_time
+        self.begin_str = begin_str
+        self.end_str = end_str
 
 
 class ChartRuntime:
@@ -49,10 +68,23 @@ class ChartRuntime:
         """Calculate the playlist based on the current lines and internal properties."""
         current_time = 0.0  # in seconds
         current_ip = self.internal_property.copy()
-        for line in self.lines:
+        warnings: list[PatternMismatchInfo] = []
+        errors: list[CommandParseErrorInfo] = []
+        for index, line in enumerate(self.lines):
+            line.set_line_number(index + 1)
             if isinstance(line, BeatLine):
+                line.set_beat_positions()
                 for beat in line.beats:
-                    note_containers = get_notes_pattern_in_beat(beat, current_ip)
+                    try:
+                        note_containers = get_notes_pattern_in_beat(beat, current_ip)
+                    except PatternMismatchWarning as e:
+                        warning = PatternMismatchInfo(
+                            message="Pattern mismatch in beat.",
+                            begin_str=e.begin_str,
+                            end_str=e.end_str,
+                        )
+                        warnings.append(warning)
+                        continue
                     ncs: list[NoteContainer] = []
                     for nc in note_containers:
                         nc_absolute = NoteContainer(
@@ -64,18 +96,35 @@ class ChartRuntime:
                         beat_id=len(self.playlist),
                         notes=ncs,
                         begin_time=current_time,
+                        begin_str=beat.begin_str or "",
+                        end_str=beat.end_str or "",
                     )
                     self.playlist.append(beat_container)
                     beat_duration = 60.0 / current_ip.bpm
                     current_time += beat_duration
             elif isinstance(line, CommandLine):
-                command_registry.execute_command(line.command, line.args, current_ip)
+                try:
+                    command_registry.execute_command(
+                        line.command, line.args, current_ip
+                    )
+                except CommandParseError as e:
+                    error = CommandParseErrorInfo(
+                        message=str(e), line_number=index + 1
+                    )
+                    errors.append(error)
+        if len(errors) > 0:
+            raise CommandParseException(errors)
+
+        if len(warnings) > 0:
+            raise PatternMismatchException(warnings)
 
     def get_playlist(self) -> list[BeatContainer]:
         return self.playlist
 
 
-NotePlayHandler = Callable[[NoteContainer, FlagBoolean, float], None]
+NotePlayHandler = Callable[
+    [NoteContainer, FlagBoolean, float], None
+]  # args: note_container, stop_flag, begin_time
 
 
 class PlayerThreadingPool:
