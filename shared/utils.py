@@ -74,3 +74,42 @@ def ask_for_admin_privileges() -> None:
         sys.exit(0)
     else:
         pass
+
+
+def should_request_admin_privileges() -> bool:
+    """Determine whether the application should request admin privileges."""
+    if CURRENT_OS == OperatingSystem.WINDOWS:
+        return not IS_ADMIN
+    else:
+        return False
+
+
+class OperationLockState(Enum):
+    FREE = "Free"
+    PLAYING = "Playing"
+    PRACTICING = "Practicing"
+
+
+class OperationLock:
+    state: OperationLockState = OperationLockState.FREE
+
+    def __init__(self) -> None:
+        pass
+
+    def is_free(self) -> bool:
+        return self.state == OperationLockState.FREE
+
+    def set_state(self, new_state: OperationLockState) -> None:
+        self.state = new_state
+
+    def release(self) -> None:
+        self.state = OperationLockState.FREE
+
+    def locked(self) -> bool:
+        return self.state != OperationLockState.FREE
+
+
+global_operation_lock = OperationLock()
+
+WARNING_CHARACTER = "⚠️"
+ERROR_CHARACTER = "❌"

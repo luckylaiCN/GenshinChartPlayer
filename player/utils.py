@@ -18,7 +18,7 @@ def wait_until(target_time: float) -> None:
     """Pause execution until the specified target time (in seconds since the epoch)."""
     while time.time() < target_time:
         time.sleep(
-            min((target_time - time.time()) / 2, 0.01)
+            max(min((target_time - time.time()) / 2, 0.01), 0.001)
         )  # Sleep briefly to avoid busy waiting
 
 
@@ -30,6 +30,6 @@ def wait_until_or_cancel(target_time: float, cancel_flag: FlagBoolean) -> bool:
         if cancel_flag.condition:
             return False
         time.sleep(
-            min((target_time - time.time()) / 2, 0.01)
+            max(min((target_time - time.time()) / 2, 0.01), 0.001)
         )  # Sleep briefly to avoid busy waiting
     return True

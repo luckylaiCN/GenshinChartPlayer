@@ -45,6 +45,8 @@ class FileFunctionalFrame(FunctionalFrame):
             self,
             text="Open Folder",
             command=self.open_folder_dialog,
+            fg_color=curr_theme.BTN_PRIMARY,
+            text_color=curr_theme.TEXT_PRIMARY,
         )
 
         self.open_folder_btn.pack(pady=10)
@@ -69,12 +71,12 @@ class FileFunctionalFrame(FunctionalFrame):
         bg_color = self._apply_appearance_mode(curr_theme.BG_SECONDARY)
         text_color = self._apply_appearance_mode(curr_theme.TEXT_PRIMARY)
 
-        ttk_style = ttk.Style()
+        self.ttk_style = ttk.Style()
 
         # configure style for empty background
-        ttk_style.theme_use("default")
+        self.ttk_style.theme_use("default")
 
-        ttk_style.configure(
+        self.ttk_style.configure(
             "Custom.Treeview",
             background=bg_color,
             fieldbackground=bg_color,
@@ -93,7 +95,7 @@ class FileFunctionalFrame(FunctionalFrame):
         # config style for default font size
         default_font = self.label._font
         new_font = (default_font._family, default_font._size + 5)  # type: ignore
-        ttk_style.configure("Custom.Treeview", font=new_font)
+        self.ttk_style.configure("Custom.Treeview", font=new_font)
         self.tree_view = ttk.Treeview(
             self,
             style="Custom.Treeview",
@@ -142,6 +144,18 @@ class FileFunctionalFrame(FunctionalFrame):
             parts.insert(0, item_text)
             item_id = self.tree_view.parent(item_id)
         return os.path.join(*parts)
+
+    def _set_appearance_mode(self, mode: str) -> None:
+        super()._set_appearance_mode(mode)
+        if self.tree_view is not None:
+            bg_color = self._apply_appearance_mode(curr_theme.BG_SECONDARY)
+            text_color = self._apply_appearance_mode(curr_theme.TEXT_PRIMARY)
+            self.ttk_style.configure(
+                "Custom.Treeview",
+                background=bg_color,
+                fieldbackground=bg_color,
+                foreground=text_color,
+            )
 
 
 def get_base_name(path: str) -> str:

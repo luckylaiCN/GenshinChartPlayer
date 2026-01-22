@@ -1,4 +1,5 @@
 import customtkinter as ctk
+import keyboard
 
 from typing import Callable, Optional
 
@@ -9,7 +10,7 @@ from gui.utils import get_root_widget, translate_tkinter_bind_to_hotkey
 class MenuBar(ctk.CTkFrame):
     def __init__(self, master=None, **kwargs):
         super().__init__(
-            master, corner_radius=0, height=25, bg_color=curr_theme.BG_PRIMARY, **kwargs
+            master, corner_radius=0, height=25, fg_color=curr_theme.BG_PRIMARY, **kwargs
         )
 
     def create_widgets(self):
@@ -38,6 +39,7 @@ class Menu(ctk.CTkFrame):
         menu_name: str = "",
         hotkey: str = "",
         command: Callable | None = None,
+        is_super_command: bool = False,  # use keyboard to handle this command
         **kwargs,
     ):
         if master is not None and isinstance(master, Menu):
@@ -46,7 +48,7 @@ class Menu(ctk.CTkFrame):
                 master.popup_menu,
                 corner_radius=0,
                 height=25,
-                bg_color=curr_theme.BG_PRIMARY,
+                fg_color=curr_theme.BG_SECONDARY,
                 **kwargs,
             )
             self.parent_menu = master
@@ -68,13 +70,21 @@ class Menu(ctk.CTkFrame):
         if hotkey:
             if self.is_top_level:
                 raise ValueError("Hotkeys can only be registered for sub-menus")
-            # register hotkey to open this menu
-            root = get_root_widget(self)
-            root.bind_all(
-                hotkey,
-                lambda event: self._command() if self._command is not None else None,
-            )
             self.hot_key_name = translate_tkinter_bind_to_hotkey(hotkey)
+            if is_super_command:
+                keyboard.add_hotkey(
+                    self.hot_key_name.lower(),
+                    lambda: self._command() if self._command is not None else None,
+                )
+            else:
+                # register hotkey to open this menu
+                root = get_root_widget(self)
+                root.bind_all(
+                    hotkey,
+                    lambda event: self._command()
+                    if self._command is not None
+                    else None,
+                )
 
         self.create_widgets()
 
@@ -87,7 +97,7 @@ class Menu(ctk.CTkFrame):
         self.after(100, self._focus_checker)
 
     def create_widget_top_level(self):
-        button = ctk.CTkButton(
+        self.button = ctk.CTkButton(
             self,
             text=self.menu_name,
             fg_color=curr_theme.BG_PRIMARY,
@@ -99,7 +109,7 @@ class Menu(ctk.CTkFrame):
             width=80,
             command=self._run_command_and_close if self._command else self.open_menu,
         )
-        button.pack(fill="x", expand=True)
+        self.button.pack(fill="x", expand=True)
 
         root = get_root_widget(self)
         self.popup_menu = ctk.CTkFrame(
@@ -126,10 +136,18 @@ class Menu(ctk.CTkFrame):
         self.after(100, self._focus_checker)
 
     def _ask_for_close(self):
+        for item in self.sub_components:
+            if isinstance(item, Menu):
+                item._ask_for_close()
         if not self.is_open:
             return
         if not self._query_mouse_focus_state():
             self._close()
+
+    def _close_all(self):
+        self._close()
+        if self.parent_menu is not None:
+            self.parent_menu._close_all()
 
     def _close(self):
         if not self.is_open:
@@ -196,7 +214,7 @@ class Menu(ctk.CTkFrame):
             corner_radius=0,
             width=100,
         )
-        button = ctk.CTkButton(
+        self.button = ctk.CTkButton(
             sub_frame,
             text=self.menu_name,
             fg_color=curr_theme.BG_PRIMARY,
@@ -220,10 +238,10 @@ class Menu(ctk.CTkFrame):
                 bg_color=curr_theme.BG_PRIMARY,
                 text_color=curr_theme.TEXT_SECONDARY,
             )
-            button.pack(side="left", fill="x", padx=(10, 0), expand=True)
+            self.button.pack(side="left", fill="x", padx=(10, 0), expand=True)
             label.pack(side="right", padx=(0, 10))
         else:
-            button.pack(side="left", fill="x", padx=10, expand=True)
+            self.button.pack(side="left", fill="x", padx=10, expand=True)
         sub_frame.pack(fill="x", expand=True)
 
         self.popup_menu = ctk.CTkFrame(
@@ -232,6 +250,8 @@ class Menu(ctk.CTkFrame):
             corner_radius=0,
             # height=25,
         )
+        if self._command is None:
+            self.button.bind("<Enter>", lambda event: self.open_sub_menu())
 
     def add_menu_item(self, item: "MenuSubComponent") -> None:
         if self._command is not None:
@@ -251,7 +271,11 @@ class Menu(ctk.CTkFrame):
     def _run_command_and_close(self) -> None:
         if self._command is not None:
             self._command()
-        self._close()
+        self._close_all()
+
+    def rename(self, new_name: str) -> None:
+        self.menu_name = new_name
+        self.button.configure(text=new_name)
 
 
 class Separator(ctk.CTkFrame):

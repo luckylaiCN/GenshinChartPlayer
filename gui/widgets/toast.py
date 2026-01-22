@@ -9,6 +9,7 @@ ACCEPTED_POSITIONS = Literal["center", "bottom-right"]
 
 class Toast(ctk.CTkFrame):
     position: ACCEPTED_POSITIONS
+
     def __init__(
         self,
         master=None,
@@ -46,3 +47,18 @@ class Toast(ctk.CTkFrame):
             x = 0
             y = 0
         self.place(x=x, y=y)
+
+
+def raise_toast(
+    master,
+    message: str,
+    duration: int = 3000,
+    position: ACCEPTED_POSITIONS = "bottom-right",
+) -> None:
+    toast = Toast(
+        master=get_root_widget(master),
+        message=message,
+        duration=duration,
+        position=position,
+    )
+    toast.show()

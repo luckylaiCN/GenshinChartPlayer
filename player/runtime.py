@@ -27,6 +27,7 @@ class BeatContainer:
     beat_id: int
     notes: list[NoteContainer]
     begin_time: float = 0.0  # in seconds
+    bpm: float = 120.0
     begin_str: str = ""
     end_str: str = ""
 
@@ -35,11 +36,13 @@ class BeatContainer:
         beat_id: int,
         notes: list[NoteContainer],
         begin_time: float = 0.0,
+        bpm: float = 120.0,
         begin_str: str = "",
         end_str: str = "",
     ) -> None:
         self.beat_id = beat_id
         self.notes = notes
+        self.bpm = bpm
         self.begin_time = begin_time
         self.begin_str = begin_str
         self.end_str = end_str
@@ -47,9 +50,9 @@ class BeatContainer:
 
 class ChartRuntime:
     """
-    A class representing the runtime environment for chart playback.
+    A class representing the runtime environment for chart playing.
     Attributes:
-    internal_property: An instance of InternalProperty containing internal properties for playback.
+    internal_property: An instance of InternalProperty containing internal properties for playing.
     """
 
     internal_property: InternalProperty
@@ -70,6 +73,7 @@ class ChartRuntime:
         current_ip = self.internal_property.copy()
         warnings: list[PatternMismatchInfo] = []
         errors: list[CommandParseErrorInfo] = []
+        self.playlist = []
         for index, line in enumerate(self.lines):
             line.set_line_number(index + 1)
             if isinstance(line, BeatLine):
@@ -98,6 +102,7 @@ class ChartRuntime:
                         begin_time=current_time,
                         begin_str=beat.begin_str or "",
                         end_str=beat.end_str or "",
+                        bpm=current_ip.bpm,
                     )
                     self.playlist.append(beat_container)
                     beat_duration = 60.0 / current_ip.bpm
@@ -108,9 +113,7 @@ class ChartRuntime:
                         line.command, line.args, current_ip
                     )
                 except CommandParseError as e:
-                    error = CommandParseErrorInfo(
-                        message=str(e), line_number=index + 1
-                    )
+                    error = CommandParseErrorInfo(message=str(e), line_number=index + 1)
                     errors.append(error)
         if len(errors) > 0:
             raise CommandParseException(errors)
@@ -180,7 +183,15 @@ class PlayerThreadingPool:
         if len(self.beats) == 0:
             return 0.0
         self.begin_time = (
-            time.time() + 0.5 - self.beats[self.current_beat_index].begin_time
+            time.time() + 1 - self.beats[self.current_beat_index].begin_time
         )
         threading.Thread(target=self.play_loop).start()
         return self.begin_time
+
+    def set_beat_index(self, index: int) -> None:
+        if index < 0 or index >= len(self.beats):
+            return
+        self.current_beat_index = index
+
+    def update_handler(self, handler: NotePlayHandler) -> None:
+        self.handler = handler

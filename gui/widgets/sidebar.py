@@ -142,7 +142,7 @@ class SidebarFrame(ctk.CTkFrame):
 
         self.add_functional_frame("Files", FileFunctionalFrame(master=self))
         self.add_functional_frame("Search", SearchFunctionalFrame(master=self))
-        self.add_functional_frame("Play", PlayFunctionalFrame(master=self))
+        self.add_functional_frame("Player", PlayFunctionalFrame(master=self))
 
         self.function_area = FunctionArea(
             master=self, tabs=list(self.functional_frames.keys())
@@ -190,6 +190,9 @@ class SidebarFrame(ctk.CTkFrame):
             self.functional_frame = None
 
     def register_open_callback(self, open_callback: Callable[[str], None]) -> None:
-        file_frame = self.functional_frames.get("Files")
+        file_frame = self.get_functional_frame("Files")
         if isinstance(file_frame, FileFunctionalFrame):
             file_frame.register_open_callback(open_callback)
+
+    def get_functional_frame(self, name: str) -> FunctionalFrame | None:
+        return self.functional_frames.get(name)

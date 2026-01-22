@@ -30,5 +30,5 @@ def available() -> bool:
 
 
 def name() -> str:
-    return "音频播放"
+    return "Sound playing"
 

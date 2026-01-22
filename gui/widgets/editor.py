@@ -5,11 +5,18 @@ from typing import Callable
 from player.pattern import PatternMismatchException
 from player.runtime import ChartRuntime
 from player.interal import InternalProperty
-from chart.parser import ChartParseException, parse_chart
 from player.command import CommandParseException
+from chart.parser import ChartParseException, parse_chart
 from gui.file_handler import FileTab
 from gui.theme import curr_theme
+from gui.widgets.toast import raise_toast
 from shared.settings import EDITOR_FONT_FAMILY
+from shared.utils import (
+    global_operation_lock,
+    OperationLockState,
+    WARNING_CHARACTER,
+    ERROR_CHARACTER,
+)
 
 
 EditorExceptionType = (
@@ -50,7 +57,7 @@ class ErrorWarningMessage(ctk.CTkFrame):
                     line_no = int(line_no_str)
                     self.text_area.insert(
                         "end",
-                        f"Pattern Mismatch at line {line_no}: {detail.message}\n",
+                        f"{WARNING_CHARACTER} Pattern Mismatch at line {line_no}: {detail.message}\n",
                     )
             elif isinstance(msg, ChartParseException):
                 for detail in msg.errors:
@@ -61,7 +68,7 @@ class ErrorWarningMessage(ctk.CTkFrame):
                     )
                     self.text_area.insert(
                         "end",
-                        f"Chart Parse Error at line {line_no}: {detail.message}\n",
+                        f"{ERROR_CHARACTER} Chart Parse Error at line {line_no}: {detail.message}\n",
                     )
             elif isinstance(msg, CommandParseException):
                 for detail in msg.errors:
@@ -72,7 +79,7 @@ class ErrorWarningMessage(ctk.CTkFrame):
                     )
                     self.text_area.insert(
                         "end",
-                        f"Command Parse Error at line {line_no}: {detail.message}\n",
+                        f"{ERROR_CHARACTER} Command Parse Error at line {line_no}: {detail.message}\n",
                     )
         if not self.messages:
             self.text_area.insert("end", "All checks passed.\n")
@@ -165,7 +172,12 @@ class LineNumbers(ctk.CTkTextbox):
         )
         self.update_line_numbers()
 
-    # def y_view_remap
+    def _set_appearance_mode(self, mode_string):
+        super()._set_appearance_mode(mode_string)
+        self.tag_config(
+            "current_line",
+            foreground=self._apply_appearance_mode(curr_theme.HIGHLIGHT_COLOR),
+        )
 
     def scroll_set_remap(self, first, last):
         # original behavior
@@ -213,7 +225,7 @@ class LineNumbers(ctk.CTkTextbox):
 
 class MultipleFileTabFrame(ctk.CTkTabview):
     files: list[FileTab]
-    curr_text_area: ctk.CTkTextbox | None
+    curr_text_area: ctk.CTkTextbox | None = None
     text_areas: dict[str, ctk.CTkTextbox]
     on_switch_tab: Callable[[str], None] | None
     on_text_change: Callable[[], None] | None
@@ -234,6 +246,17 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         self.on_text_change = on_text_change
 
     def on_close_tab(self, tab_name: str):
+        if not global_operation_lock.is_free():
+            if global_operation_lock.state == OperationLockState.PLAYING:
+                raise_toast(
+                    self,
+                    "Cannot close tab while playing is in progress.",
+                    duration=3000,
+                )
+                return
+            if global_operation_lock.state == OperationLockState.PRACTICING:
+                # TODO: practice mode handling.
+                pass
         tab_index = self.index(tab_name)
         auto_switch_index = (
             tab_index - 1
@@ -279,7 +302,9 @@ class MultipleFileTabFrame(ctk.CTkTabview):
     def add_file_tab(self, file_tab: FileTab):
         tab_name = file_tab.tab_identifier
         self.add(tab_name)
-        self.set(tab_name)
+        is_busy = not global_operation_lock.is_free()
+        if not is_busy:
+            self.set(tab_name)  # don't switch if it's busy
         if file_tab.source_path is not None:
             self.opened_paths.add(file_tab.source_path)
 
@@ -317,7 +342,8 @@ class MultipleFileTabFrame(ctk.CTkTabview):
 
         self.files.append(file_tab)
         self.text_areas[tab_name] = text_area
-        self.curr_text_area = text_area
+        if not is_busy:
+            self.curr_text_area = text_area
 
         line_numbers.update_line_numbers()
         text_area.bind("<<Modified>>", self._on_text_modified)
@@ -357,6 +383,9 @@ class MultipleFileTabFrame(ctk.CTkTabview):
 class EditorFrame(ctk.CTkFrame):
     callback_on_tab_switch: Callable[[str], None] | None
     runtime: ChartRuntime | None = None
+    _insert_cursor_index: int = 0
+    _curr_beat_index: int = -1
+    can_edit: bool = True
 
     def __init__(
         self, master=None, callback: Callable[[str], None] | None = None, **kwargs
@@ -365,6 +394,64 @@ class EditorFrame(ctk.CTkFrame):
         self.configure(fg_color=curr_theme.BG_SECONDARY)
         self.create_widgets()
         self.callback_on_tab_switch = callback
+        self._listen_insert_cursor()
+
+    def _on_cursor_move(self, target_index: int | None = None):
+        if not global_operation_lock.is_free():
+            return
+        if target_index is None:
+            return
+        if self.runtime is None:
+            return
+        # mid-search for the beat that target_index belongs to
+        low = 0
+        high = len(self.runtime.playlist) - 1
+        beat_index = -1
+        while low <= high:
+            mid = (low + high) // 2
+            beat = self.runtime.playlist[mid]
+            start = self.get_index_from_position(beat.begin_str)
+            end = self.get_index_from_position(beat.end_str)
+            if start <= target_index <= end:
+                # found the beat
+                beat_index = mid
+                break
+            elif target_index < start:
+                high = mid - 1
+            else:
+                low = mid + 1
+        self._curr_beat_index = beat_index
+        self.highlight_current_beat()
+
+    def highlight_current_beat(self):
+        beat_index = self._curr_beat_index
+        if self.runtime is None:
+            return
+        if beat_index == -1:
+            return
+        beat = self.runtime.playlist[beat_index]
+        text_area = self.text_areas.curr_text_area
+        if text_area is None:
+            return
+        text_area.tag_remove("current_beat", "0.0", "end")
+        text_area.tag_config(
+            "current_beat",
+            background=self._apply_appearance_mode(curr_theme.PLAYING_HIGHLIGHT_BG),
+        )
+        text_area.tag_add("current_beat", beat.begin_str, beat.end_str)
+        text_area.see(beat.begin_str)
+
+    def _listen_insert_cursor(self):
+        text_area = self.text_areas.curr_text_area
+        if text_area is None:
+            pass
+        else:
+            current_index = self.get_index_from_position(text_area.index("insert"))
+            if current_index != self._insert_cursor_index:
+                self._insert_cursor_index = current_index
+                self._on_cursor_move(target_index=current_index)
+
+        self.after(100, self._listen_insert_cursor)
 
     def register_callback(self, callback: Callable[[str], None]) -> None:
         self.callback_on_tab_switch = callback
@@ -415,6 +502,7 @@ class EditorFrame(ctk.CTkFrame):
         self.parse_current_chart()
 
     def parse_current_chart(self):
+        self.runtime = None
         current_text = self.get_text()
         self.command_frame.set_messages([])
         self.reset_tags()
@@ -504,3 +592,61 @@ class EditorFrame(ctk.CTkFrame):
     def handle_new_file(self) -> None:
         self.text_areas.add_file(None)
         self.parse_current_chart()
+
+    def get_index_from_position(self, postion: str) -> int:
+        """Convert a position string like '10.5' to a integer index in the text area."""
+        text_area = self.text_areas.curr_text_area
+        if text_area is None:
+            return -1
+        try:
+            return int(text_area._textbox.count("0.0", postion)[0])  # type: ignore
+        except Exception:
+            return -1
+
+    def get_position_from_index(self, index: int) -> str:
+        """Convert a integer index in the text area to a position string like '10.5'."""
+        text_area = self.text_areas.curr_text_area
+        if text_area is None:
+            return "0.0"
+        return text_area._textbox.index(f"0.0+{index}c")  # type: ignore
+
+    def set_current_beat_index(self, index: int) -> None:
+        self._curr_beat_index = index
+        self.highlight_current_beat()
+
+    def _set_appearance_mode(self, mode: str) -> None:
+        super()._set_appearance_mode(mode)
+        self.configure(fg_color=curr_theme.BG_SECONDARY)
+        text_area = self.text_areas.curr_text_area
+        if text_area is None:
+            return
+        text_area.tag_config(
+            "current_beat",
+            background=self._apply_appearance_mode(curr_theme.PLAYING_HIGHLIGHT_BG),
+        )
+        text_area.tag_config(
+            "error_tag",
+            background=self._apply_appearance_mode(curr_theme.ERROR_TAG_BG),
+        )
+        text_area.tag_config(
+            "warning_tag",
+            background=self._apply_appearance_mode(curr_theme.WARNING_TAG_BG),
+        )
+
+    def modify_editable(self, can_edit: bool) -> None:
+        self.can_edit = can_edit
+        text_area = self.text_areas.curr_text_area
+        if text_area is None:
+            return
+        if can_edit:
+            text_area.configure(state="normal")
+            self.enable_tab_switching()
+        else:
+            text_area.configure(state="disabled")
+            self.disable_tab_switching()
+
+    def disable_tab_switching(self) -> None:
+        self.text_areas._segmented_button.configure(state="disabled")
+
+    def enable_tab_switching(self) -> None:
+        self.text_areas._segmented_button.configure(state="normal")

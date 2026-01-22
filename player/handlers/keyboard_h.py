@@ -23,4 +23,4 @@ def available() -> bool:
 
 
 def name() -> str:
-    return "键盘输入"
+    return "Keyboard Input"

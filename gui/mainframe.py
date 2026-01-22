@@ -1,26 +1,35 @@
+import sys
+
 import customtkinter as ctk
 
 from gui.widgets.editor import EditorFrame
 from gui.widgets.sidebar import SidebarFrame
+from gui.widgets.sidebars.play import PlayFunctionalFrame
+from gui.widgets.sidebars.file import FileFunctionalFrame
 from gui.widgets.menubar import MenuBar, Menu
-from gui.widgets.toast import Toast
+from gui.widgets.toast import raise_toast
+from gui.widgets.notification import raise_bottom_warning
 from gui.theme import curr_theme
-from gui.utils import do_nothing, ask_open_file_dialog, ask_save_file_dialog
+from gui.utils import ask_open_file_dialog, ask_save_file_dialog
 from shared.settings import ACCEPTED_FILE_EXTENSIONS
+from shared.utils import should_request_admin_privileges, ask_for_admin_privileges
+from player.handlers import imported_handler_modules
 
 
 class MainFrame(ctk.CTkFrame):
     master: ctk.CTk
+    topmost: bool = False
 
     def __init__(self, master=None, **kwargs):
         super().__init__(master, **kwargs)
         self.configure(fg_color=curr_theme.BG_SECONDARY)
         self.create_menu_bar()
         self.create_widgets()
+        self.defult_settings()
 
     def create_menu_bar(self):
         self.menubar = MenuBar(master=self)
-        self.menubar.pack(side="top", fill="x")
+        self.menubar.pack(side="top", fill="x", expand=True)
 
         self.file_menu = Menu(master=self.menubar, menu_name="File")
         self.menubar.add_menu(self.file_menu)
@@ -38,6 +47,14 @@ class MainFrame(ctk.CTkFrame):
             command=self.open_file_dialog,
             hotkey="<Control-o>",
         )
+
+        self.open_new_folder_menu_item = Menu(
+            master=self.file_menu,
+            menu_name="Open Folder",
+            command=self.handle_new_folder,
+            hotkey="<Control-Shift-O>",
+        )
+
         self.file_menu.add_separator()
         self.save_menu_item = Menu(
             master=self.file_menu,
@@ -52,20 +69,119 @@ class MainFrame(ctk.CTkFrame):
             hotkey="<Control-Shift-S>",
         )
 
-        self.edit_menu = Menu(master=self.menubar, menu_name="Edit")
-        self.menubar.add_menu(self.edit_menu)
-        self.undo_menu_item = Menu(
-            master=self.edit_menu,
-            menu_name="Undo",
-            command=do_nothing,
-            hotkey="<Control-z>",
+        # self.edit_menu = Menu(master=self.menubar, menu_name="Edit")
+        # self.menubar.add_menu(self.edit_menu)
+        # self.undo_menu_item = Menu(
+        #     master=self.edit_menu,
+        #     menu_name="Undo",
+        #     command=do_nothing,
+        #     hotkey="<Control-z>",
+        # )
+        # self.redo_menu_item = Menu(
+        #     master=self.edit_menu,
+        #     menu_name="Redo",
+        #     command=do_nothing,
+        #     hotkey="<Control-y>",
+        # )
+        self.settings_menu = Menu(master=self.menubar, menu_name="Settings")
+        self.menubar.add_menu(self.settings_menu)
+        self.toggle_topmost_menu_item = Menu(
+            master=self.settings_menu,
+            menu_name="Enable Always on Top",
+            command=self.toggle_topmost,
         )
-        self.redo_menu_item = Menu(
-            master=self.edit_menu,
-            menu_name="Redo",
-            command=do_nothing,
-            hotkey="<Control-y>",
+        self.settings_menu.add_separator()
+        self.handler_selection_menu_item = Menu(
+            master=self.settings_menu,
+            menu_name="Player Handler",
         )
+        self.handler_items = {}
+        for handler_name, module in imported_handler_modules.items():
+            handler_menu_item = Menu(
+                master=self.handler_selection_menu_item,
+                menu_name=module.name(),
+                command=lambda name=handler_name: self.set_handler(name),
+            )
+            self.handler_items[handler_name] = handler_menu_item
+
+        self.settings_menu.add_separator()
+
+        self.apperence_mode_menu = Menu(
+            master=self.settings_menu,
+            menu_name="Appearance Mode",
+        )
+
+        app_mods = [
+            ("Light Mode", "light"),
+            ("Dark Mode", "dark"),
+            ("System Mode", "system"),
+        ]
+        self.mode_menu_items = {}
+        for mod_name, mod_key in app_mods:
+            mod_menu_item = Menu(
+                master=self.apperence_mode_menu,
+                menu_name=mod_name,
+                command=lambda mode=mod_key: self.toggle_appearance_mode(mode),
+            )
+            self.mode_menu_items[mod_key] = mod_menu_item
+
+        self.player_menu = Menu(master=self.menubar, menu_name="Play")
+        self.menubar.add_menu(self.player_menu)
+        self.play_menu_item = Menu(
+            master=self.player_menu,
+            menu_name="Play",
+            command=self.player_handle_play,
+            hotkey="<F5>",
+            is_super_command=True,
+        )
+        self.play_from_start_menu_item = Menu(
+            master=self.player_menu,
+            menu_name="Play from Start",
+            command=self.player_handle_play_from_start,
+            hotkey="<Shift-F5>",
+            is_super_command=True,
+        )
+        self.stop_menu_item = Menu(
+            master=self.player_menu,
+            menu_name="Stop",
+            command=self.player_handle_stop,
+            hotkey="<F6>",
+            is_super_command=True,
+        )
+        self.reset_menu_item = Menu(
+            master=self.player_menu,
+            menu_name="Stop and Reset",
+            command=self.player_handle_stop_and_reset,
+            hotkey="<F7>",
+            is_super_command=True,
+        )
+
+        if should_request_admin_privileges():
+            self.reopen_as_admin_menu_item = Menu(
+                master=self.settings_menu,
+                menu_name="Reopen as Administrator",
+                command=self.handle_reopen_asministrator,
+            )
+
+    def set_handler(self, handler_name: str, silent=False) -> None:
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame.set_handler(handler_name)
+            if not silent:
+                raise_toast(
+                    master=self,
+                    message="Player handler changed successfully.",
+                    duration=2000,
+                    position="center",
+                )
+
+    def toggle_topmost(self) -> None:
+        self.topmost = not self.topmost
+        if self.topmost:
+            self.toggle_topmost_menu_item.rename("Disable Always on Top")
+        else:
+            self.toggle_topmost_menu_item.rename("Enable Always on Top")
+        self.master.wm_attributes("-topmost", self.topmost)
 
     def open_file_dialog(self) -> None:
         file_path = ask_open_file_dialog(ACCEPTED_FILE_EXTENSIONS)
@@ -87,8 +203,10 @@ class MainFrame(ctk.CTkFrame):
             pady=10,
         )
 
-        # register open file callback
         self.sidebar_frame.register_open_callback(self.editor_frame.handle_open_file)
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame.bind_editor(self.editor_frame)
 
     def save_current_file(self) -> None:
         curr_tab = self.editor_frame.text_areas.get_current_file_tab()
@@ -96,13 +214,12 @@ class MainFrame(ctk.CTkFrame):
             curr_tab.update_content(self.editor_frame.text_areas.get_text_area_str())
             if curr_tab.source_path is not None:
                 curr_tab.save()
-                toast = Toast(
+                raise_toast(
                     master=self,
                     message="File saved successfully.",
                     duration=2000,
                     position="center",
                 )
-                toast.show()
             else:
                 # no source path, trigger save as dialog
                 self.save_current_file_as()
@@ -116,13 +233,57 @@ class MainFrame(ctk.CTkFrame):
                     self.editor_frame.text_areas.get_text_area_str()
                 )
                 curr_tab.save(path=file_path)
-                toast = Toast(
+                raise_toast(
                     master=self,
                     message="File saved successfully.",
                     duration=2000,
                     position="center",
                 )
-                toast.show()
 
     def handle_new_file(self) -> None:
         self.editor_frame.handle_new_file()
+
+    def handle_new_folder(self) -> None:
+        file_fun = self.sidebar_frame.get_functional_frame("Files")
+        if isinstance(file_fun, FileFunctionalFrame):
+            file_fun.open_folder_dialog()
+
+    def toggle_appearance_mode(self, mode: str) -> None:
+        ctk.set_appearance_mode(mode)
+
+    def defult_settings(self) -> None:
+        default_handler = "player.handlers.sound_h"
+        if default_handler in imported_handler_modules.keys():
+            self.set_handler(default_handler, silent=True)
+
+        if should_request_admin_privileges():
+            raise_bottom_warning(
+                master=self,
+                text="Some features may require administrator privileges. "
+                "You can reopen the application as administrator from the Settings menu.",
+            )
+
+    def player_handle_play(self) -> None:
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame.request_play()
+
+    def player_handle_stop(self) -> None:
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame.request_stop()
+
+    def player_handle_stop_and_reset(self) -> None:
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame.request_stop_and_reset()
+
+    def player_handle_play_from_start(self) -> None:
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame.request_play_from_start()
+
+    def handle_reopen_asministrator(self) -> None:
+        if should_request_admin_privileges():
+            ask_for_admin_privileges()
+            sys.exit(0)
