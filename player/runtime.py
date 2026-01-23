@@ -13,12 +13,13 @@ from player.command import (
     CommandParseErrorInfo,
     CommandParseException,
 )
-from player.utils import FlagBoolean, wait_until_or_cancel
+from player.utils import  wait_until_or_cancel
 from player.pattern import (
     PatternMismatchException,
     PatternMismatchWarning,
     PatternMismatchInfo,
 )
+from shared.utils import FlagBoolean
 
 import threading
 
@@ -30,6 +31,7 @@ class BeatContainer:
     bpm: float = 120.0
     begin_str: str = ""
     end_str: str = ""
+    _internal_line: int = -1
 
     def __init__(
         self,
@@ -39,6 +41,7 @@ class BeatContainer:
         bpm: float = 120.0,
         begin_str: str = "",
         end_str: str = "",
+        line: int = -1,
     ) -> None:
         self.beat_id = beat_id
         self.notes = notes
@@ -46,6 +49,7 @@ class BeatContainer:
         self.begin_time = begin_time
         self.begin_str = begin_str
         self.end_str = end_str
+        self._internal_line = line
 
 
 class ChartRuntime:
@@ -103,6 +107,7 @@ class ChartRuntime:
                         begin_str=beat.begin_str or "",
                         end_str=beat.end_str or "",
                         bpm=current_ip.bpm,
+                        line=index,
                     )
                     self.playlist.append(beat_container)
                     beat_duration = 60.0 / current_ip.bpm

@@ -24,7 +24,7 @@ def is_valid_token(token: str) -> bool:
 
 def is_beat_line(line: str) -> bool:
     """Check if all characters in the line are valid chart tokens."""
-    return all(is_valid_token(char) for char in line)
+    return all(is_valid_token(char) for char in line) and len(line.strip()) > 0
 
 
 def token_to_keyboard(token: ChartNotation) -> ChartKey | None:

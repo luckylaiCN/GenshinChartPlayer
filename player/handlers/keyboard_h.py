@@ -11,7 +11,9 @@ def handler(
     if status:
         kb = note_container.note.keyboard
         if kb is not None:
-            keyboard.press_and_release(kb)
+            keyboard.press_and_release(
+                kb.lower()
+            )  # for single key presses, lowercase the key.
 
 
 def available() -> bool:

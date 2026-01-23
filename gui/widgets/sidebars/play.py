@@ -7,7 +7,8 @@ from gui.theme import curr_theme
 from gui.widgets.sidebars.base import FunctionalFrame
 from gui.widgets.editor import EditorFrame
 from gui.widgets.toast import raise_toast
-from shared.utils import global_operation_lock, OperationLockState
+from gui.widgets.floating import FloatingChartDisplay
+from shared.utils import global_operation_lock, OperationLockState, FlagBoolean
 from player.runtime import PlayerThreadingPool
 from player.handlers import imported_handler_modules
 
@@ -23,6 +24,8 @@ class PlayFunctionalFrame(FunctionalFrame):
     handler_name: str = ""
     ptp: PlayerThreadingPool | None = None
     begin_time: float = 0.0
+    floating_display: FloatingChartDisplay | None = None
+    floating_display_visible: FlagBoolean = FlagBoolean(False)
 
     def bind_editor(self, editor: EditorFrame) -> None:
         self.binded_editor = editor
@@ -116,6 +119,9 @@ class PlayFunctionalFrame(FunctionalFrame):
                 position="center",
             )
             return False
+        if self.floating_display is not None and self.floating_display.alive.get():
+            self.floating_display.set_runtime(runtime)
+
         self.is_playing = True
         self.play_pause_button.configure(text=PAUSE_CHARACTER)
         global_operation_lock.set_state(OperationLockState.PLAYING)
@@ -159,6 +165,8 @@ class PlayFunctionalFrame(FunctionalFrame):
                 break
         if desired_index != editor_index:
             self.binded_editor.set_current_beat_index(desired_index - 1)
+        if self.floating_display is not None and self.floating_display.alive.get():
+            self.floating_display.set_beat_index(desired_index - 1)
         if desired_index < len(runtime.playlist):
             self.after(100, self._update_editor_current_beat)
         else:
@@ -270,3 +278,30 @@ class PlayFunctionalFrame(FunctionalFrame):
                 position="center",
             )
             return False
+
+    def enable_floating_display(self) -> None:
+        if self.floating_display is None or not self.floating_display.alive.get():
+            self.floating_display = FloatingChartDisplay(
+                master=self,
+                runtime=self.binded_editor.runtime if self.binded_editor else None,
+                indicator=self.floating_display_visible,
+            )
+            self.floating_display.geometry("600x100")
+            self.floating_display.center_on_screen()
+        self.floating_display.deiconify()
+        self.floating_display.lift()
+        self.floating_display.auto_justify_window()
+
+    def disable_floating_display(self) -> None:
+        if self.floating_display is not None and self.floating_display.alive.get():
+            self.floating_display.alive.modify(False)
+            self.floating_display.destroy()
+            self.floating_display = None
+
+    def toggle_floating_display(self) -> None:
+        if self.floating_display_visible.get():
+            self.disable_floating_display()
+            self.floating_display_visible.modify(False)
+        else:
+            self.enable_floating_display()
+            self.floating_display_visible.modify(True)

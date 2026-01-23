@@ -1,17 +1,6 @@
 import time
 
-
-class FlagBoolean:
-    condition: bool
-
-    def __init__(self, condition: bool = False) -> None:
-        self.condition = condition
-
-    def modify(self, condition: bool) -> None:
-        self.condition = condition
-
-    def get(self) -> bool:
-        return self.condition
+from shared.utils import FlagBoolean
 
 
 def wait_until(target_time: float) -> None:
@@ -27,7 +16,7 @@ def wait_until_or_cancel(target_time: float, cancel_flag: FlagBoolean) -> bool:
     Returns True if the wait completed, False if it was canceled.
     """
     while time.time() < target_time:
-        if cancel_flag.condition:
+        if cancel_flag.get():
             return False
         time.sleep(
             max(min((target_time - time.time()) / 2, 0.01), 0.001)

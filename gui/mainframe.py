@@ -155,6 +155,13 @@ class MainFrame(ctk.CTkFrame):
             hotkey="<F7>",
             is_super_command=True,
         )
+        self.player_menu.add_separator()
+
+        self.enable_floating_display_menu_item = Menu(
+            master=self.player_menu,
+            menu_name="Toggle Floating Display",
+            command=self.toggle_floating_display,
+        )
 
         if should_request_admin_privileges():
             self.reopen_as_admin_menu_item = Menu(
@@ -287,3 +294,8 @@ class MainFrame(ctk.CTkFrame):
         if should_request_admin_privileges():
             ask_for_admin_privileges()
             sys.exit(0)
+
+    def toggle_floating_display(self) -> None:
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame.toggle_floating_display()

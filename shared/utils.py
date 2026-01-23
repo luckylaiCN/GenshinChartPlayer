@@ -113,3 +113,16 @@ global_operation_lock = OperationLock()
 
 WARNING_CHARACTER = "⚠️"
 ERROR_CHARACTER = "❌"
+
+
+class FlagBoolean:
+    condition: bool
+
+    def __init__(self, condition: bool = False) -> None:
+        self.condition = condition
+
+    def modify(self, condition: bool) -> None:
+        self.condition = condition
+
+    def get(self) -> bool:
+        return self.condition
