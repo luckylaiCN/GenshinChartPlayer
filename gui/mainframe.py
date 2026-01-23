@@ -155,6 +155,15 @@ class MainFrame(ctk.CTkFrame):
             hotkey="<F7>",
             is_super_command=True,
         )
+
+        self.practice_menu_item = Menu(
+            master=self.player_menu,
+            menu_name="Practice Mode",
+            command=self.player_handle_practice,
+            hotkey="<F8>",
+            is_super_command=True,
+        )
+
         self.player_menu.add_separator()
 
         self.enable_floating_display_menu_item = Menu(
@@ -214,6 +223,7 @@ class MainFrame(ctk.CTkFrame):
         play_frame = self.sidebar_frame.get_functional_frame("Player")
         if isinstance(play_frame, PlayFunctionalFrame):
             play_frame.bind_editor(self.editor_frame)
+            self.editor_frame.register_callback(lambda _: play_frame.on_tab_switched())
 
     def save_current_file(self) -> None:
         curr_tab = self.editor_frame.text_areas.get_current_file_tab()
@@ -299,3 +309,8 @@ class MainFrame(ctk.CTkFrame):
         play_frame = self.sidebar_frame.get_functional_frame("Player")
         if isinstance(play_frame, PlayFunctionalFrame):
             play_frame.toggle_floating_display()
+
+    def player_handle_practice(self) -> None:
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame.toggle_practice_mode()
