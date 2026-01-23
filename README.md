@@ -48,7 +48,7 @@ python main.py
 
 This project does not include any audio files. Users must provide their own audio files for the charts they wish to play. Ensure that you have the legal right to use any audio files you incorporate into your charts.
 
-To add audio files to your charts, place them in the project directory `audio/` and name them with their key signatures (from `C3` to `B5`, sharps are not included). Files should be in `.mp3` format.
+To add audio files to your charts, place them in the project directory `audio/` and name them with their key signatures (from `C3` to `B6`, sharps are not included). Files should be in `.mp3` format.
 
 The default handler is located in [`player/handlers/sound_h.py`](https://github.com/luckylaiCN/GenshinChartPlayer/blob/main/player/handlers/sound_h.py).
 
@@ -59,6 +59,16 @@ When packaging the application for distribution using tools like PyInstaller, en
 And worth to mention, this project is built upon `customtkinter` for GUI, therefore, you should not use `--onefile` option when packaging. Additionally, some extra steps may be required to ensure that `customtkinter` resources are correctly included in the packaged application. Please refer to [customtkinter's documentation](https://customtkinter.tomschimansky.com/documentation/packaging/) for more details.
 
 Moreover, we dynamically load handlers from the `player/handlers/` directory. Make sure to include this directory and its contents in your package. Default handlers are `sound_h.py` and `keyboard_h.py`. Please make sure they are included to ensure the application functions correctly.
+
+### Permission
+This project requires permission to simulate keyboard input to interact with the Genshin Impact game. Ensure that you run the application with appropriate permissions to allow it to send keyboard events. On Windows, you may need to run the application as an administrator.
+
+The lack of proper permissions may result in unexpected crashes or failures when attempting to play charts or listen to keyboard inputs.
+
+### Cross-Platform Compatibility
+This project is primarily designed for Windows due to its reliance on simulating keyboard input for Genshin Impact. While some components may work on other operating systems, full functionality is not guaranteed outside of Windows.
+
+For users on other operating systems, we welcome issues and contributions to help improve cross-platform compatibility.
 
 ## Contributing
 
