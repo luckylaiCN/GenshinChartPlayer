@@ -69,6 +69,15 @@ class MainFrame(ctk.CTkFrame):
             hotkey="<Control-Shift-S>",
         )
 
+        self.file_menu.add_separator()
+
+        self.quit_menu_item = Menu(
+            master=self.file_menu,
+            menu_name="Quit",
+            command=self.quit_application,
+            hotkey="<Control-q>",
+        )
+
         # self.edit_menu = Menu(master=self.menubar, menu_name="Edit")
         # self.menubar.add_menu(self.edit_menu)
         # self.undo_menu_item = Menu(
@@ -156,11 +165,20 @@ class MainFrame(ctk.CTkFrame):
             is_super_command=True,
         )
 
+        self.player_menu.add_separator()
+
         self.practice_menu_item = Menu(
             master=self.player_menu,
             menu_name="Practice Mode",
             command=self.player_handle_practice,
             hotkey="<F8>",
+            is_super_command=True,
+        )
+        self.practice_mode_reset_menu_item = Menu(
+            master=self.player_menu,
+            menu_name="Practice Mode (Reset)",
+            command=lambda: self.player_handle_practice(reset=True),
+            hotkey="<Shift-F8>",
             is_super_command=True,
         )
 
@@ -244,6 +262,8 @@ class MainFrame(ctk.CTkFrame):
     def save_current_file_as(self) -> None:
         curr_tab = self.editor_frame.text_areas.get_current_file_tab()
         if curr_tab is not None:
+            old_name = curr_tab.tab_identifier
+            old_path = curr_tab.source_path
             file_path = ask_save_file_dialog(ACCEPTED_FILE_EXTENSIONS)
             if file_path is not None:
                 curr_tab.update_content(
@@ -256,6 +276,11 @@ class MainFrame(ctk.CTkFrame):
                     duration=2000,
                     position="center",
                 )
+                new_name = curr_tab.tab_identifier
+                new_path = curr_tab.source_path
+                self.editor_frame.rename_tab(old_name, new_name)
+                self.editor_frame.remove_path_from_opened(old_path)
+                self.editor_frame.add_path_to_opened(new_path)
 
     def handle_new_file(self) -> None:
         self.editor_frame.handle_new_file()
@@ -310,7 +335,10 @@ class MainFrame(ctk.CTkFrame):
         if isinstance(play_frame, PlayFunctionalFrame):
             play_frame.toggle_floating_display()
 
-    def player_handle_practice(self) -> None:
+    def player_handle_practice(self, reset=False) -> None:
         play_frame = self.sidebar_frame.get_functional_frame("Player")
         if isinstance(play_frame, PlayFunctionalFrame):
-            play_frame.toggle_practice_mode()
+            play_frame.toggle_practice_mode(reset=reset)
+
+    def quit_application(self) -> None:
+        self.master.quit()

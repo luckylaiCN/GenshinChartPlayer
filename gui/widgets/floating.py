@@ -194,6 +194,12 @@ class FloatingChartDisplay(FloatingWidget):
         width = int(width / scaling_factor)
         self.geometry(f"{width}x{desired_height}")
 
+    def remove_tags(self) -> None:
+        self.display_textbox.tag_remove("current_beat", "1.0", "end")
+
     def _close(self):
         self.alive.modify(False)
         super()._close()
+
+    def update_instantly(self) -> None:
+        self._update_display()

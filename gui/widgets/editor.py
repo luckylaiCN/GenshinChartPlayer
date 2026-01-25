@@ -275,17 +275,19 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         # curr_tab = self.get()
         self.callback_handle_tab_changed()
 
-    def add_file(self, path: str | None) -> None:
+    def add_file(self, path: str | None) -> bool:  # if new tab created, return True
         if path is not None:
             if path in self.opened_paths:
                 tab = self._get_opened_file_by_path(path)
                 if tab is not None:
                     self.set(tab.tab_identifier)
-                return
+                    return False
+                return False  # should not happen
 
         self.add_file_tab(
             FileTab.from_file(path) if path is not None else FileTab.new_tab()
         )
+        return True
 
     def _get_opened_file_by_path(self, path: str) -> FileTab | None:
         for f in self.files:
@@ -344,6 +346,7 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         self.text_areas[tab_name] = text_area
         if not is_busy:
             self.curr_text_area = text_area
+            self.callback_handle_tab_changed()
 
         line_numbers.update_line_numbers()
         text_area.bind("<<Modified>>", self._on_text_modified)
@@ -480,8 +483,16 @@ class EditorFrame(ctk.CTkFrame):
 
     def on_tab_switch(self, tab_name: str):
         self.parse_current_chart()
+        self._recall_beat_index()
         if self.callback_on_tab_switch:
             self.callback_on_tab_switch(tab_name)
+
+    def _recall_beat_index(self):
+        text_area = self.text_areas.curr_text_area
+        if text_area is None:
+            return
+        current_index = self.get_index_from_position(text_area.index("insert"))
+        self._on_cursor_move(target_index=current_index)
 
     def on_text_change(self):
         self.parse_current_chart()
@@ -498,8 +509,10 @@ class EditorFrame(ctk.CTkFrame):
         return self.text_areas.get_text_area_str()
 
     def handle_open_file(self, file_tab: str | None) -> None:
-        self.text_areas.add_file(file_tab)
-        self.parse_current_chart()
+        status = self.text_areas.add_file(file_tab)
+        if status:
+            self.parse_current_chart()
+        self._recall_beat_index()
 
     def parse_current_chart(self):
         self.runtime = None
@@ -650,3 +663,17 @@ class EditorFrame(ctk.CTkFrame):
 
     def enable_tab_switching(self) -> None:
         self.text_areas._segmented_button.configure(state="normal")
+
+    def rename_tab(self, old_name: str, new_name: str) -> None:
+        self.text_areas.rename(old_name, new_name)
+        self.text_areas.set(new_name)
+
+    def remove_path_from_opened(self, path: str | None) -> None:
+        if path is None:
+            return
+        if path in self.text_areas.opened_paths:
+            self.text_areas.opened_paths.discard(path)
+
+    def add_path_to_opened(self, path: str | None) -> None:
+        if path is not None:
+            self.text_areas.opened_paths.add(path)

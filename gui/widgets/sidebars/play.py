@@ -118,7 +118,7 @@ class PlayFunctionalFrame(FunctionalFrame):
             return False
         return True
 
-    def _play(self, reset=False) -> bool:
+    def _player_start(self, reset=False) -> bool:
         if not self._check_before_playing():
             return False
         if self.binded_editor is None or self.binded_editor.runtime is None:
@@ -167,7 +167,7 @@ class PlayFunctionalFrame(FunctionalFrame):
             return
         if self.ptp.stop_flag.get():
             if self.is_playing:
-                self._stop()
+                self._player_stop()
             return
         editor_index = self.binded_editor._curr_beat_index
         editor_index = max(0, editor_index)
@@ -186,7 +186,7 @@ class PlayFunctionalFrame(FunctionalFrame):
             self.after(100, self._update_editor_current_beat)
         else:
             self.after(
-                1000, self._stop
+                1000, self._player_stop
             )  # wait a bit before stopping. otherwise last note may be cut off.
 
     def _update_widgets_index(self, index: int) -> None:
@@ -195,13 +195,15 @@ class PlayFunctionalFrame(FunctionalFrame):
         if self.floating_display is not None and self.floating_display.alive.get():
             self.floating_display.set_beat_index(index)
 
-    def _stop(self, reset=False):
+    def _player_stop(self, reset=False):
         if self.ptp is not None:
             self.ptp.stop()
         if reset and self.binded_editor is not None:
             self.binded_editor.set_current_beat_index(0)
         if self.binded_editor is not None:
             self.binded_editor.modify_editable(True)
+        if self.floating_display is not None and self.floating_display.alive.get():
+            self.floating_display.remove_tags()
         self.is_playing = False
         self.play_pause_button.configure(text=PLAY_CHARACTER)
         global_operation_lock.release()
@@ -210,11 +212,11 @@ class PlayFunctionalFrame(FunctionalFrame):
         if not self._check_before_playing():
             return
         if self.is_playing:
-            self._stop()
+            self._player_stop()
 
         else:
             if global_operation_lock.is_free():
-                self._play()
+                self._player_start()
 
             else:
                 # cannot play, already locked
@@ -230,10 +232,10 @@ class PlayFunctionalFrame(FunctionalFrame):
         if not self._check_before_playing():
             return
         if self.is_playing:
-            self._stop(reset=True)
+            self._player_stop(reset=True)
         else:
             if global_operation_lock.is_free():
-                self._play(reset=True)
+                self._player_start(reset=True)
             else:
                 raise_toast(
                     master=self,
@@ -247,7 +249,7 @@ class PlayFunctionalFrame(FunctionalFrame):
         if not self._check_before_playing():
             return False
         if global_operation_lock.is_free():
-            self._play()
+            self._player_start()
             return True
         else:
             raise_toast(
@@ -260,7 +262,7 @@ class PlayFunctionalFrame(FunctionalFrame):
 
     def request_stop(self) -> bool:
         if self.is_playing:
-            self._stop()
+            self._player_stop()
 
             return True
         else:
@@ -276,7 +278,7 @@ class PlayFunctionalFrame(FunctionalFrame):
         if not self._check_before_playing():
             return False
         if global_operation_lock.is_free():
-            return self._play(reset=True)
+            return self._player_start(reset=True)
         else:
             raise_toast(
                 master=self,
@@ -288,7 +290,7 @@ class PlayFunctionalFrame(FunctionalFrame):
 
     def request_stop_and_reset(self) -> bool:
         if self.is_playing:
-            self._stop(reset=True)
+            self._player_stop(reset=True)
 
             return True
         else:
@@ -327,13 +329,13 @@ class PlayFunctionalFrame(FunctionalFrame):
             self.enable_floating_display()
             self.floating_display_visible.modify(True)
 
-    def toggle_practice_mode(self) -> None:
+    def toggle_practice_mode(self, reset=False) -> None:
         if self.is_practicing:
-            self._practice_stop()
+            self._practice_stop(reset=reset)
             self.pratice_mode_button.configure(text="Practice Mode")
         else:
             if global_operation_lock.is_free():
-                if not self._practice_start():
+                if not self._practice_start(reset=reset):
                     return
                 self.pratice_mode_button.configure(text="Exit Practice Mode")
             else:
@@ -345,13 +347,15 @@ class PlayFunctionalFrame(FunctionalFrame):
                 )
                 return
 
-    def _practice_start(self) -> bool:
+    def _practice_start(self, reset=False) -> bool:
         if not self._check_before_playing():
             return False
         if self.binded_editor is None or self.binded_editor.runtime is None:
             return False
 
         runtime = self.binded_editor.runtime
+        if self.floating_display is not None and self.floating_display.alive.get():
+            self.floating_display.set_runtime(runtime)
 
         self.is_practicing = True
         global_operation_lock.set_state(OperationLockState.PRACTICING)
@@ -362,6 +366,8 @@ class PlayFunctionalFrame(FunctionalFrame):
         )
         beat = self.binded_editor._curr_beat_index
         if beat < 0 or beat >= len(self.pc.beat_containers):
+            beat = 0
+        if reset:
             beat = 0
         threading.Thread(target=self.pc.start, args=(beat,)).start()
         self._update_widgets_index(beat)
@@ -376,6 +382,8 @@ class PlayFunctionalFrame(FunctionalFrame):
             self.binded_editor.set_current_beat_index(0)
         if self.binded_editor is not None:
             self.binded_editor.modify_editable(True)
+        if self.floating_display is not None and self.floating_display.alive.get():
+            self.floating_display.remove_tags()
         self.is_practicing = False
         global_operation_lock.release()
 
@@ -389,7 +397,7 @@ class PlayFunctionalFrame(FunctionalFrame):
     def _on_destroy(self) -> None:
         self.disable_floating_display()
         if self.is_playing:
-            self._stop()
+            self._player_stop()
         if self.is_practicing:
             self._practice_stop()
 
@@ -398,3 +406,9 @@ class PlayFunctionalFrame(FunctionalFrame):
             runtime = self.binded_editor.runtime if self.binded_editor else None
             if runtime is not None:
                 self.floating_display.set_runtime(runtime)
+                if len(runtime.playlist) > 0:
+                    beat = self.binded_editor._curr_beat_index if self.binded_editor else -1
+                    # beat = max(0, min(beat, len(runtime.playlist) - 1) )
+                    self.floating_display.set_beat_index(beat)
+                # self.floating_display.update_instantly()
+                

@@ -32,6 +32,7 @@ class Menu(ctk.CTkFrame):
     _command: Callable | None = None
     parent_menu: Optional["Menu"] = None
     hot_key_name: str = ""
+    _hook: Optional[Callable[[], None]] = None
 
     def __init__(
         self,
@@ -72,7 +73,7 @@ class Menu(ctk.CTkFrame):
                 raise ValueError("Hotkeys can only be registered for sub-menus")
             self.hot_key_name = translate_tkinter_bind_to_hotkey(hotkey)
             if is_super_command:
-                keyboard.add_hotkey(
+                self._hook = keyboard.add_hotkey(
                     self.hot_key_name.lower(),
                     lambda: self._command() if self._command is not None else None,
                 )
@@ -87,6 +88,20 @@ class Menu(ctk.CTkFrame):
                 )
 
         self.create_widgets()
+        if self._hook is not None:
+            self._reupdate_hook()
+
+    def _reupdate_hook(self):
+        # we have to remove and re-add the hotkey occasionally
+        # sometimes keyboard module fails to trigger the hotkey otherwise
+        if self._hook is not None:
+            keyboard.remove_hotkey(self._hook)
+            self._hook = keyboard.add_hotkey(
+                self.hot_key_name.lower(),
+                lambda: self._command() if self._command is not None else None,
+            )
+        UPDATE_INTERVAL_MS = 1 * 60 * 1000  # 1 minute
+        self.after(UPDATE_INTERVAL_MS, self._reupdate_hook)
 
     def create_widgets(self):
         if self.is_top_level:

@@ -1,11 +1,14 @@
 import os
 
+from contextlib import suppress
+
 from chart.constants import NOTATION_INDEX_TABLE
 from player.pattern import NoteContainer
 from player.utils import FlagBoolean, wait_until_or_cancel
+from shared.utils import AUDIO_DIR
 
 from playsound import playsound
-from shared.utils import AUDIO_DIR
+
 
 
 def handler(
@@ -16,7 +19,8 @@ def handler(
         # print(f"Playing sound for note: {note_container.note}")
         basename = note_container.note.token + ".mp3"
         audio_path = os.path.join(AUDIO_DIR, basename)
-        playsound(audio_path)
+        with suppress(UnicodeDecodeError): # sometimes playsound raises this error inexplicably on windows. Why?
+            playsound(audio_path)
 
 
 def available() -> bool:
