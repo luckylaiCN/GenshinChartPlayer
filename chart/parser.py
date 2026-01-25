@@ -85,16 +85,22 @@ class BeatLine(Line):
 
     beats: list[Beat]
     raw_text: str
+    comment_begin_index: int | None  # position where comment begins, None if no comment
 
     def __init__(self, raw_text: str) -> None:
         self.raw_text = raw_text
         self.beats = []
+        self.comment_begin_index = None
 
     def set_beats(self, beats: list[Beat]) -> None:
         self.beats = beats
 
     def serialize(self) -> None:
-        beat_strs = self.raw_text.rstrip().split("/")
+        """Serialize the beat line into its constituent beats."""
+        raw_comment_removed = self.raw_text.split("#", 1)[0]
+        if "#" in self.raw_text:
+            self.comment_begin_index = self.raw_text.index("#")
+        beat_strs = raw_comment_removed.rstrip().split("/")
         if beat_strs[-1] == "":
             beat_strs = beat_strs[:-1]
         begin_index = 0
@@ -129,6 +135,8 @@ class BeatLine(Line):
         return self.raw_text
 
     def __repr__(self) -> str:
+        if self.comment_begin_index is not None:
+            return f"BeatLine(raw_text={self.raw_text!r}, beats={self.beats!r}, comment_begin_index={self.comment_begin_index!r})"
         return f"BeatLine(raw_text={self.raw_text!r}, beats={self.beats!r})"
 
 
@@ -175,23 +183,61 @@ def parse_line(line_str: str, line_number: int) -> Line:
     return result_line
 
 
-def parse_chart(chart_str: str) -> list[Line]:
+def parse_chart(chart_str: str, do_formatting: bool = False) -> list[Line]:
     """Parse a chart string into a list of Line objects."""
     lines: list[Line] = []
     line_strs = chart_str.splitlines()
     exception_list: list[ParseErrorInfo] = []
-    for line_number, line_str in enumerate(line_strs, start=1):
-        try:
+    line_counter = 0
+    beat_line_encountered = False
+    # Rules for formatting:
+    # 1. Ignore empty lines.
+    # 2. Reset line counters when new section starts.
+    # 3. A new section starts when a command line or text line is encountered. 
+    #    reset line counters to 0 after that line.
+    #    but do not reset if havn't encountered any beat lines yet.
+    # 4. Line counter only counts beat lines.
+    # 5. Add empty lines between sections and every 4 beat lines.
+    if do_formatting:
+        line_number = 1
+        for line_str in line_strs:
+            if line_str.strip() == "":
+                continue
             line = parse_line(line_str, line_number)
-            lines.append(line)
-        except ParseError as e:
-            exception_list.append(
-                ParseErrorInfo(
-                    line_number=line_number,
-                    position=e.position,
-                    message=str(e),
+            if isinstance(line, BeatLine):
+                beat_line_encountered = True
+                lines.append(line)
+                line_counter += 1
+                line_number += 1
+                # Add an empty line after every 4 beat lines
+                if line_counter % 4 == 0:
+                    lines.append(TextLine(""))
+                    line_number += 1
+            else:
+                if beat_line_encountered:
+                    # Reset line counter and line number, add an empty line before new section if last line is not empty
+                    if line_counter % 4 != 0:
+                        lines.append(TextLine(""))
+                        line_number += 1
+                    line_counter = 0
+                    beat_line_encountered = False
+                lines.append(line)
+                line_number += 1
+            
+
+    else:
+        for line_number, line_str in enumerate(line_strs, start=1):
+            try:
+                line = parse_line(line_str, line_number)
+                lines.append(line)
+            except ParseError as e:
+                exception_list.append(
+                    ParseErrorInfo(
+                        line_number=line_number,
+                        position=e.position,
+                        message=str(e),
+                    )
                 )
-            )
     if exception_list:
         raise ChartParseException(exception_list)
     return lines

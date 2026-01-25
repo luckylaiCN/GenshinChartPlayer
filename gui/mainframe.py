@@ -78,8 +78,17 @@ class MainFrame(ctk.CTkFrame):
             hotkey="<Control-q>",
         )
 
-        # self.edit_menu = Menu(master=self.menubar, menu_name="Edit")
-        # self.menubar.add_menu(self.edit_menu)
+        self.edit_menu = Menu(master=self.menubar, menu_name="Edit")
+
+        self.menubar.add_menu(self.edit_menu)
+
+        self.format_menu_item = Menu(
+            master=self.edit_menu,
+            menu_name="Format Chart",
+            command=self.handle_format_chart,
+            hotkey="<Alt-Shift-F>",
+        )
+
         # self.undo_menu_item = Menu(
         #     master=self.edit_menu,
         #     menu_name="Undo",
@@ -342,3 +351,6 @@ class MainFrame(ctk.CTkFrame):
 
     def quit_application(self) -> None:
         self.master.quit()
+
+    def handle_format_chart(self) -> None:
+        self.editor_frame.format_chart()

@@ -6,7 +6,7 @@ from player.pattern import PatternMismatchException
 from player.runtime import ChartRuntime
 from player.interal import InternalProperty
 from player.command import CommandParseException
-from chart.parser import ChartParseException, parse_chart
+from chart.parser import ChartParseException, parse_chart, BeatLine
 from gui.file_handler import FileTab
 from gui.theme import curr_theme
 from gui.widgets.toast import raise_toast
@@ -386,6 +386,8 @@ class MultipleFileTabFrame(ctk.CTkTabview):
 class EditorFrame(ctk.CTkFrame):
     callback_on_tab_switch: Callable[[str], None] | None
     runtime: ChartRuntime | None = None
+    text_areas: MultipleFileTabFrame
+    command_frame: ExpandableCommandFrame
     _insert_cursor_index: int = 0
     _curr_beat_index: int = -1
     can_edit: bool = True
@@ -480,6 +482,7 @@ class EditorFrame(ctk.CTkFrame):
         self.bind("<Configure>", self.on_resize)
         self.text_areas.bind_on_switch_tab(self.on_tab_switch)
         self.text_areas.bind_on_text_change(self.on_text_change)
+        self._apply_theme()
 
     def on_tab_switch(self, tab_name: str):
         self.parse_current_chart()
@@ -514,16 +517,49 @@ class EditorFrame(ctk.CTkFrame):
             self.parse_current_chart()
         self._recall_beat_index()
 
-    def parse_current_chart(self):
+    def format_chart(self) -> None:
+        # reject if playing, practicing or no tab opened
+        if not global_operation_lock.is_free():
+            raise_toast(
+                self,
+                "Cannot format chart while another operation is in progress.",
+                duration=3000,
+                position="center",
+            )
+            return
+        if self.text_areas.curr_text_area is None:
+            raise_toast(
+                self,
+                "No file is opened to format.",
+                duration=3000,
+                position="center",
+            )
+            return
+        self.parse_current_chart(do_formatting=True)
+
+    def parse_current_chart(self, do_formatting: bool = False) -> None:
         self.runtime = None
         current_text = self.get_text()
         self.command_frame.set_messages([])
         self.reset_tags()
+        secondary_lines: list[int] = []
+        comments_str: list[tuple[str, str]] = []
         if current_text.strip() == "":
             return
         messages: list[EditorExceptionType] = []
         try:
-            lines = parse_chart(current_text)
+            lines = parse_chart(current_text, do_formatting=do_formatting)
+            if do_formatting:
+                # re-insert formatted text
+                text_area = self.text_areas.curr_text_area
+                if text_area is not None:
+                    formatted_text = "\n".join(str(line) for line in lines).rstrip()
+                    curr_index = text_area.index("insert")
+                    text_area.delete("0.0", "end")
+                    text_area.insert("0.0", formatted_text)
+                    text_area.mark_set("insert", curr_index)
+                    # supress <<Modified>> event
+                    text_area.edit_modified(False)
         except ChartParseException as e:
             messages.append(e)
             error_line_nos = [
@@ -538,6 +574,18 @@ class EditorFrame(ctk.CTkFrame):
                 if text_area is not None:
                     text_area.see(f"{first_error_line}.0")
             return
+
+        for idx, line in enumerate(lines):
+            if isinstance(line, BeatLine):
+                if line.comment_begin_index is not None:
+                    begin_str = f"{idx + 1}.{line.comment_begin_index}"
+                    end_str = f"{idx + 1}.end"
+                    comments_str.append((begin_str, end_str))
+            else:
+                secondary_lines.append(idx)
+
+        self.set_secondary_line_tags(secondary_lines)
+        self.set_comment_tags(comments_str)
 
         ip = InternalProperty()
         runtime = ChartRuntime(ip, lines)
@@ -569,7 +617,7 @@ class EditorFrame(ctk.CTkFrame):
         self.command_frame.set_messages(messages)
 
     def reset_tags(self):
-        tags = ["error_tag", "warning_tag"]
+        tags = ["error_tag", "warning_tag", "secondary_line", "comment_tag"]
         text_area = self.text_areas.curr_text_area
         if text_area is None:
             return
@@ -602,6 +650,33 @@ class EditorFrame(ctk.CTkFrame):
         for begin_str, end_str in positions:
             text_area.tag_add(tag_name, f"{begin_str}", f"{end_str}")
 
+    def set_secondary_line_tags(self, line_nos: list[int]):
+        tag_name = "secondary_line"
+        text_area = self.text_areas.curr_text_area
+        if text_area is None:
+            return
+        text_area.tag_remove(tag_name, "0.0", "end")
+        text_area.tag_config(
+            tag_name,
+            foreground=self._apply_appearance_mode(curr_theme.TEXT_SECONDARY),
+        )
+        for idx in line_nos:
+            line_no = idx + 1  # line numbers are 1-based
+            text_area.tag_add(tag_name, f"{line_no}.0", f"{line_no}.0 lineend")
+
+    def set_comment_tags(self, comments: list[tuple[str, str]]):
+        tag_name = "comment_tag"
+        text_area = self.text_areas.curr_text_area
+        if text_area is None:
+            return
+        text_area.tag_remove(tag_name, "0.0", "end")
+        text_area.tag_config(
+            tag_name,
+            foreground=self._apply_appearance_mode(curr_theme.TEXT_COMMENT),
+        )
+        for begin_str, end_str in comments:
+            text_area.tag_add(tag_name, f"{begin_str}", f"{end_str}")
+
     def handle_new_file(self) -> None:
         self.text_areas.add_file(None)
         self.parse_current_chart()
@@ -629,6 +704,9 @@ class EditorFrame(ctk.CTkFrame):
 
     def _set_appearance_mode(self, mode: str) -> None:
         super()._set_appearance_mode(mode)
+        self._apply_theme()
+
+    def _apply_theme(self) -> None:
         self.configure(fg_color=curr_theme.BG_SECONDARY)
         text_area = self.text_areas.curr_text_area
         if text_area is None:
@@ -644,6 +722,14 @@ class EditorFrame(ctk.CTkFrame):
         text_area.tag_config(
             "warning_tag",
             background=self._apply_appearance_mode(curr_theme.WARNING_TAG_BG),
+        )
+        text_area.tag_config(
+            "secondary_line",
+            foreground=self._apply_appearance_mode(curr_theme.TEXT_SECONDARY),
+        )
+        text_area.tag_config(
+            "comment_tag",
+            foreground=self._apply_appearance_mode(curr_theme.TEXT_COMMENT),
         )
 
     def modify_editable(self, can_edit: bool) -> None:

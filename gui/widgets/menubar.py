@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import keyboard
+import threading
 
 from typing import Callable, Optional
 
@@ -73,10 +74,12 @@ class Menu(ctk.CTkFrame):
                 raise ValueError("Hotkeys can only be registered for sub-menus")
             self.hot_key_name = translate_tkinter_bind_to_hotkey(hotkey)
             if is_super_command:
-                self._hook = keyboard.add_hotkey(
-                    self.hot_key_name.lower(),
-                    lambda: self._command() if self._command is not None else None,
-                )
+                # self._hook = keyboard.add_hotkey(
+                #     self.hot_key_name.lower(),
+                #     lambda: self._command() if self._command is not None else None,
+                # )
+                threading.Thread(target=self._hot_key_listener, daemon=True).start()
+                # so what is the problem with keyboard module hotkey registration?
             else:
                 # register hotkey to open this menu
                 root = get_root_widget(self)
@@ -88,12 +91,21 @@ class Menu(ctk.CTkFrame):
                 )
 
         self.create_widgets()
-        if self._hook is not None:
-            self._reupdate_hook()
+        # if self._hook is not None:
+        #     self._reupdate_hook()   
+
+    def _hot_key_listener(self):
+        while self.winfo_exists():
+            if self.hot_key_name:
+                if self._command is not None:
+                    keyboard.wait(self.hot_key_name.lower())
+                    self._command()
 
     def _reupdate_hook(self):
         # we have to remove and re-add the hotkey occasionally
         # sometimes keyboard module fails to trigger the hotkey otherwise
+
+        # oops: it seems not working at all
         if self._hook is not None:
             keyboard.remove_hotkey(self._hook)
             self._hook = keyboard.add_hotkey(

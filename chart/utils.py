@@ -24,7 +24,8 @@ def is_valid_token(token: str) -> bool:
 
 def is_beat_line(line: str) -> bool:
     """Check if all characters in the line are valid chart tokens."""
-    return all(is_valid_token(char) for char in line) and len(line.strip()) > 0
+    line_no_comments = line.split("#", 1)[0]  # remove comments
+    return all(is_valid_token(char) for char in line_no_comments) and len(line_no_comments.strip()) > 0
 
 
 def token_to_keyboard(token: ChartNotation) -> ChartKey | None:

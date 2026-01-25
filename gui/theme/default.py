@@ -4,6 +4,7 @@ COLOR = str | tuple[str, str]
 class ThemedColor:
     TEXT_PRIMARY: COLOR = ("#0e1d28", "#CCCCCC")
     TEXT_SECONDARY: COLOR = ("#555555", "#888889")
+    TEXT_COMMENT: COLOR = ("#567A0D", "#378658")
     BG_PRIMARY: COLOR = ("#E3E3E3", "#1F1F1F")
     BG_SECONDARY: COLOR = ("#F1F1F1", "#181818")
     BORDER_COLOR: COLOR = ("#41A7E1", "#3C3C3C")
@@ -15,3 +16,4 @@ class ThemedColor:
     WARNING_TAG_BG: COLOR = ("#FFD580", "#C97500")
     PLAYING_HIGHLIGHT_BG: COLOR = ("#6FCE64", "#018416")
     BTN_PRIMARY: COLOR = ("#6CB3EE", "#0965C1")
+

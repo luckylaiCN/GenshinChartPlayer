@@ -32,7 +32,7 @@ class BasicNote(ABC):
         pass
 
     @abstractmethod
-    def standardized_str(self) -> str:
+    def standardized_str(self) -> str: # Do we really need this method?
         pass
 
 
