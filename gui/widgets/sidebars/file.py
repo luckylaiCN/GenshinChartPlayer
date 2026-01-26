@@ -57,13 +57,28 @@ class FileFunctionalFrame(FunctionalFrame):
             self.target_path = selected_path
             self.update_directory_structure()
 
+    def set_target_path(self, path: str) -> None:
+        self.target_path = path
+        self.update_directory_structure()
+
     def update_directory_structure(self) -> None:
         if self.target_path is None:
             return
+
+        if not os.path.isdir(self.target_path):
+            return
+
         dir_dict = get_dicted_dir(self.target_path)
 
-        self.label.configure(text=f"Current Folder: \n{self.target_path}")
-        self.open_folder_btn.configure(text="Change Folder")
+        self.label.configure(
+            text=f"Current Folder: \n{self.target_path}",
+            text_color=curr_theme.TEXT_PRIMARY,
+        )
+        self.open_folder_btn.configure(
+            text="Change Folder",
+            fg_color=curr_theme.BTN_PRIMARY,
+            text_color=curr_theme.TEXT_PRIMARY,
+        )
 
         if self.tree_view is not None:
             self.tree_view.destroy()
@@ -156,6 +171,11 @@ class FileFunctionalFrame(FunctionalFrame):
                 fieldbackground=bg_color,
                 foreground=text_color,
             )
+        self.label.configure(text_color=curr_theme.TEXT_PRIMARY)
+        self.open_folder_btn.configure(
+            fg_color=curr_theme.BTN_PRIMARY,
+            text_color=curr_theme.TEXT_PRIMARY,
+        )
 
 
 def get_base_name(path: str) -> str:

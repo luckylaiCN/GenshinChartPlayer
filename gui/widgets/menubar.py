@@ -67,6 +67,7 @@ class Menu(ctk.CTkFrame):
 
         self.menu_name = menu_name
         self.sub_components = []
+        self.hot_key_label = None
 
         self._command = command
         if hotkey:
@@ -92,7 +93,7 @@ class Menu(ctk.CTkFrame):
 
         self.create_widgets()
         # if self._hook is not None:
-        #     self._reupdate_hook()   
+        #     self._reupdate_hook()
 
     def _hot_key_listener(self):
         while self.winfo_exists():
@@ -267,6 +268,7 @@ class Menu(ctk.CTkFrame):
             )
             self.button.pack(side="left", fill="x", padx=(10, 0), expand=True)
             label.pack(side="right", padx=(0, 10))
+            self.hot_key_label = label
         else:
             self.button.pack(side="left", fill="x", padx=10, expand=True)
         sub_frame.pack(fill="x", expand=True)
@@ -303,6 +305,21 @@ class Menu(ctk.CTkFrame):
     def rename(self, new_name: str) -> None:
         self.menu_name = new_name
         self.button.configure(text=new_name)
+
+    def _set_appearance_mode(self, mode_string):
+        super()._set_appearance_mode(mode_string)
+        self.button.configure(
+            fg_color=curr_theme.BG_PRIMARY,
+            bg_color=curr_theme.BG_PRIMARY,
+            text_color=curr_theme.TEXT_PRIMARY,
+            hover_color=curr_theme.BG_HOVER,
+        )
+        if self.hot_key_label is not None:
+            self.hot_key_label.configure(
+                fg_color=curr_theme.BG_PRIMARY,
+                bg_color=curr_theme.BG_PRIMARY,
+                text_color=curr_theme.TEXT_SECONDARY,
+            )
 
 
 class Separator(ctk.CTkFrame):

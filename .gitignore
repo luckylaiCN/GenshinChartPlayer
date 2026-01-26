@@ -23,3 +23,6 @@ audio/
 
 # scripts in development
 *-dev.py
+
+# session file
+.session.json

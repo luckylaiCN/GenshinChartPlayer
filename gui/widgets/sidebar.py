@@ -2,7 +2,7 @@ import tkinter as tk
 
 import customtkinter as ctk
 
-from typing import Callable
+from typing import Callable, TypedDict
 
 from gui.theme import curr_theme
 from gui.utils import get_root_widget
@@ -12,6 +12,10 @@ from gui.widgets.sidebars import (
     SearchFunctionalFrame,
     FunctionalFrame,
 )
+
+
+class FileFrameSessionData(TypedDict):
+    last_opened_path: str | None
 
 
 class FunctionArea(ctk.CTkFrame):
@@ -76,6 +80,14 @@ class FunctionArea(ctk.CTkFrame):
             )
         if self.event_callback:
             self.event_callback(self.curr_tab)
+
+    def _set_appearance_mode(self, mode_string):
+        super()._set_appearance_mode(mode_string)
+        for btn in self.buttons.values():
+            btn.configure(
+                text_color=curr_theme.TEXT_PRIMARY,
+                hover_color=curr_theme.BG_HOVER,
+            )
 
 
 class MiddleSeparator(ctk.CTkFrame):
@@ -196,3 +208,20 @@ class SidebarFrame(ctk.CTkFrame):
 
     def get_functional_frame(self, name: str) -> FunctionalFrame | None:
         return self.functional_frames.get(name)
+
+    def dump_session(self) -> FileFrameSessionData:
+        file_frame = self.get_functional_frame("Files")
+        last_opened_path: str | None = None
+        if isinstance(file_frame, FileFunctionalFrame):
+            last_opened_path = file_frame.target_path
+        return {"last_opened_path": last_opened_path}
+
+    def load_session(self, data: FileFrameSessionData) -> None:
+        file_frame = self.get_functional_frame("Files")
+        if isinstance(file_frame, FileFunctionalFrame):
+            last_opened_path = data.get("last_opened_path", None)
+            if last_opened_path is not None:
+                file_frame.set_target_path(last_opened_path)
+
+    def _set_appearance_mode(self, mode_string):
+        super()._set_appearance_mode(mode_string)

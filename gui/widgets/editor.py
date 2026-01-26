@@ -1,6 +1,8 @@
+import os
 import customtkinter as ctk
 
-from typing import Callable
+from typing import Callable, TypedDict
+from contextlib import suppress
 
 from player.pattern import PatternMismatchException
 from player.runtime import ChartRuntime
@@ -22,6 +24,10 @@ from shared.utils import (
 EditorExceptionType = (
     PatternMismatchException | ChartParseException | CommandParseException
 )
+
+
+class EditorSessionData(TypedDict):
+    opened_files_paths: list[str]
 
 
 class ErrorWarningMessage(ctk.CTkFrame):
@@ -85,6 +91,12 @@ class ErrorWarningMessage(ctk.CTkFrame):
             self.text_area.insert("end", "All checks passed.\n")
         self.text_area.configure(state="disabled")
 
+    def _set_appearance_mode(self, mode_string):
+        self.text_area.configure(
+            text_color=curr_theme.TEXT_PRIMARY  # type: ignore
+        )
+        return super()._set_appearance_mode(mode_string)
+
 
 class ExpandableCommandFrame(
     ctk.CTkFrame
@@ -140,6 +152,12 @@ class ExpandableCommandFrame(
             self.content_frame.pack(fill="both", expand=True)
             self.is_expanded = True
 
+    def _set_appearance_mode(self, mode_string):
+        self.toggle_button.configure(
+            text_color=curr_theme.TEXT_PRIMARY,
+        )
+        return super()._set_appearance_mode(mode_string)
+
 
 class LineNumbers(ctk.CTkTextbox):
     line_count = 0
@@ -177,6 +195,9 @@ class LineNumbers(ctk.CTkTextbox):
         self.tag_config(
             "current_line",
             foreground=self._apply_appearance_mode(curr_theme.HIGHLIGHT_COLOR),
+        )
+        self.configure(
+            text_color=curr_theme.TEXT_PRIMARY  # type: ignore
         )
 
     def scroll_set_remap(self, first, last):
@@ -223,10 +244,23 @@ class LineNumbers(ctk.CTkTextbox):
         self.line_count = line_count
 
 
+class NumberedTextArea(ctk.CTkTextbox):
+    def __init__(self, master=None, **kwargs):
+        super().__init__(master, **kwargs)
+
+    def bind_line_numbers(self, line_numbers: LineNumbers) -> None:
+        self.line_numbers = line_numbers
+
+    def _set_appearance_mode(self, mode_string):
+        super()._set_appearance_mode(mode_string)
+        self.configure(text_color=curr_theme.TEXT_PRIMARY)
+        self.line_numbers._set_appearance_mode(mode_string)
+
+
 class MultipleFileTabFrame(ctk.CTkTabview):
     files: list[FileTab]
-    curr_text_area: ctk.CTkTextbox | None = None
-    text_areas: dict[str, ctk.CTkTextbox]
+    curr_text_area: NumberedTextArea | None = None
+    text_areas: dict[str, NumberedTextArea]
     on_switch_tab: Callable[[str], None] | None
     on_text_change: Callable[[], None] | None
     opened_paths: set[str]
@@ -284,6 +318,9 @@ class MultipleFileTabFrame(ctk.CTkTabview):
                     return False
                 return False  # should not happen
 
+        if path is not None and not os.path.isfile(path):
+            return False
+
         self.add_file_tab(
             FileTab.from_file(path) if path is not None else FileTab.new_tab()
         )
@@ -323,7 +360,7 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         close_button.place(relx=1.0, x=-10, y=0, anchor="ne")
 
         # text area
-        text_area = ctk.CTkTextbox(
+        text_area = NumberedTextArea(
             self.tab(tab_name),
             wrap="word",
             fg_color=curr_theme.BG_PRIMARY,
@@ -341,7 +378,7 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         text_area.insert("0.0", file_tab.editing_content)
         # clear undo stack, so that the initial content is not undoable
         text_area.edit_reset()
-
+        text_area.bind_line_numbers(line_numbers)
         self.files.append(file_tab)
         self.text_areas[tab_name] = text_area
         if not is_busy:
@@ -350,6 +387,7 @@ class MultipleFileTabFrame(ctk.CTkTabview):
 
         line_numbers.update_line_numbers()
         text_area.bind("<<Modified>>", self._on_text_modified)
+        self.update()
 
     def _on_text_modified(self, event):
         text_area = event.widget
@@ -381,6 +419,11 @@ class MultipleFileTabFrame(ctk.CTkTabview):
     def get_current_file_tab(self) -> FileTab | None:
         current_tab = self.get()
         return self._get_opened_file_by_tabname(current_tab)
+
+    def _set_appearance_mode(self, mode_string):
+        super()._set_appearance_mode(mode_string)
+        for text_area in self.text_areas.values():
+            text_area.configure(text_color=curr_theme.TEXT_PRIMARY)
 
 
 class EditorFrame(ctk.CTkFrame):
@@ -506,7 +549,8 @@ class EditorFrame(ctk.CTkFrame):
             self.text_areas.configure(height=new_height)
         else:
             new_height = self.winfo_height() - 20
-            self.text_areas.configure(height=new_height)
+            with suppress(AttributeError):
+                self.text_areas.configure(height=new_height)
 
     def get_text(self) -> str:
         return self.text_areas.get_text_area_str()
@@ -705,6 +749,9 @@ class EditorFrame(ctk.CTkFrame):
     def _set_appearance_mode(self, mode: str) -> None:
         super()._set_appearance_mode(mode)
         self._apply_theme()
+        self.text_areas._segmented_button.configure(
+            text_color=curr_theme.TEXT_PRIMARY,
+        )
 
     def _apply_theme(self) -> None:
         self.configure(fg_color=curr_theme.BG_SECONDARY)
@@ -763,3 +810,21 @@ class EditorFrame(ctk.CTkFrame):
     def add_path_to_opened(self, path: str | None) -> None:
         if path is not None:
             self.text_areas.opened_paths.add(path)
+
+    def dump_session(self) -> EditorSessionData:
+        opened_files_paths: list[str] = []
+        for file_tab in self.text_areas.files:
+            if file_tab.source_path is not None:
+                opened_files_paths.append(file_tab.source_path)
+        return {
+            "opened_files_paths": opened_files_paths,
+        }
+
+    def load_session(self, data: EditorSessionData) -> None:
+        opened_files_paths = data.get("opened_files_paths", [])
+        self._delay_open_files(opened_files_paths)
+
+    def _delay_open_files(self, paths: list[str]) -> None:
+        interval = 200  # milliseconds
+        for i, path in enumerate(paths):
+            self.after(i * interval, lambda p=path: self.handle_open_file(p))

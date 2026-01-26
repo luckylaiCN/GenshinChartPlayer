@@ -90,6 +90,7 @@ class PlayFunctionalFrame(FunctionalFrame):
             self,
             text="Practice Mode",
             fg_color=curr_theme.BG_PRIMARY,
+            text_color=curr_theme.TEXT_PRIMARY,
             command=self.toggle_practice_mode,
         )
 
@@ -407,8 +408,22 @@ class PlayFunctionalFrame(FunctionalFrame):
             if runtime is not None:
                 self.floating_display.set_runtime(runtime)
                 if len(runtime.playlist) > 0:
-                    beat = self.binded_editor._curr_beat_index if self.binded_editor else -1
+                    beat = (
+                        self.binded_editor._curr_beat_index
+                        if self.binded_editor
+                        else -1
+                    )
                     # beat = max(0, min(beat, len(runtime.playlist) - 1) )
                     self.floating_display.set_beat_index(beat)
                 # self.floating_display.update_instantly()
-                
+
+    def _set_appearance_mode(self, mode_string):
+        super()._set_appearance_mode(mode_string)
+        self.button_group.configure(fg_color=curr_theme.BG_SECONDARY)
+        self.label.configure(text_color=curr_theme.TEXT_PRIMARY)
+        self.handler_label.configure(text_color=curr_theme.TEXT_SECONDARY)
+        self.play_pause_button.configure(fg_color=curr_theme.BTN_PRIMARY)
+        self.playover_stop_button.configure(fg_color=curr_theme.BTN_PRIMARY)
+        self.pratice_mode_button.configure(
+            fg_color=curr_theme.BG_PRIMARY, text_color=curr_theme.TEXT_PRIMARY
+        )
