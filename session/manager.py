@@ -1,11 +1,12 @@
 # save and load session when opening/closing the program
 
 from typing import Any, TypedDict
+from contextlib import suppress
+
 from session.base import RecoverableWidget, ConfigurationItem, VERSION
 from shared.utils import SYSTEM_USER_UNIQUE_ID
 from shared.settings import SESSION_FILE_PATH
 from shared.rtjson import RTJSON
-
 
 class JSONSessionData(TypedDict):
     version: int
@@ -72,10 +73,12 @@ class JSONSessionManager:
         widget_data = data.get("widgets", {})
         for name, widget in self.registered_widgets.items():
             if name in widget_data:
-                widget.load_session(widget_data[name])
+                with suppress(Exception):
+                    widget.load_session(widget_data[name])
         for name, config in self.registered_configurations.items():
             if name in configurations:
-                config.load_configuration(configurations[name])
+                with suppress(Exception):
+                    config.load_configuration(configurations[name])
 
     def load_configurations(self) -> None:
         all_data = self.rt_json.load()

@@ -27,7 +27,7 @@ EditorExceptionType = (
 
 
 class EditorSessionData(TypedDict):
-    opened_files_paths: list[str]
+    opened_files_paths: list[tuple[str, bool]]  # (path, is_modified)
 
 
 class ErrorWarningMessage(ctk.CTkFrame):
@@ -251,6 +251,9 @@ class NumberedTextArea(ctk.CTkTextbox):
     def bind_line_numbers(self, line_numbers: LineNumbers) -> None:
         self.line_numbers = line_numbers
 
+    def bind_close_button(self, btn: ctk.CTkButton) -> None:
+        self.close_button = btn
+
     def _set_appearance_mode(self, mode_string):
         super()._set_appearance_mode(mode_string)
         self.configure(text_color=curr_theme.TEXT_PRIMARY)
@@ -309,7 +312,9 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         # curr_tab = self.get()
         self.callback_handle_tab_changed()
 
-    def add_file(self, path: str | None) -> bool:  # if new tab created, return True
+    def add_file(
+        self, path: str | None, is_modified: bool = False
+    ) -> bool:  # if new tab created, return True
         if path is not None:
             if path in self.opened_paths:
                 tab = self._get_opened_file_by_path(path)
@@ -321,9 +326,22 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         if path is not None and not os.path.isfile(path):
             return False
 
-        self.add_file_tab(
-            FileTab.from_file(path) if path is not None else FileTab.new_tab()
-        )
+        unmodified_tab = self.get_unmodified_file_tabs()
+        if unmodified_tab:
+            tab_to_use = unmodified_tab[0]
+            if path is not None:
+                new_filetab = FileTab.from_file(path)
+            else:
+                new_filetab = FileTab.new_tab()
+            self._replace_tab(tab_to_use.tab_identifier, new_filetab)
+            if is_modified:
+                new_filetab.is_modified = True
+            return True
+
+        new_tab = FileTab.from_file(path) if path is not None else FileTab.new_tab()
+        if is_modified:
+            new_tab.is_modified = True
+        self.add_file_tab(new_tab)
         return True
 
     def _get_opened_file_by_path(self, path: str) -> FileTab | None:
@@ -379,6 +397,7 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         # clear undo stack, so that the initial content is not undoable
         text_area.edit_reset()
         text_area.bind_line_numbers(line_numbers)
+        text_area.bind_close_button(close_button)
         self.files.append(file_tab)
         self.text_areas[tab_name] = text_area
         if not is_busy:
@@ -424,6 +443,60 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         super()._set_appearance_mode(mode_string)
         for text_area in self.text_areas.values():
             text_area.configure(text_color=curr_theme.TEXT_PRIMARY)
+
+    def _replace_tab(self, old_file_identifier: str, new_filetab: FileTab):
+        # get current text
+        old_text_area = self.text_areas.get(old_file_identifier)
+        if old_text_area is None:
+            return
+
+        new_text = new_filetab.editing_content
+        # replace tabname
+        self.rename(old_file_identifier, new_filetab.tab_identifier)
+        self.set(new_filetab.tab_identifier)
+        # replace text area content
+        old_text_area.delete("0.0", "end")
+        old_text_area.insert("0.0", new_text)
+        old_text_area.edit_reset()
+        # update opened paths
+        old_filetab = self._get_opened_file_by_tabname(old_file_identifier)
+        if old_filetab is not None:
+            if old_filetab.source_path is not None:
+                self.opened_paths.discard(old_filetab.source_path)
+            if new_filetab.source_path is not None:
+                self.opened_paths.add(new_filetab.source_path)
+        # update key in text_areas dict
+        self.text_areas[new_filetab.tab_identifier] = self.text_areas.pop(
+            old_file_identifier
+        )
+        # update line numbers binding
+        self.text_areas[new_filetab.tab_identifier].line_numbers.update_line_numbers()
+
+        # update close button command
+        close_button = self.text_areas[new_filetab.tab_identifier].close_button
+        close_button.configure(
+            command=lambda: self.on_close_tab(new_filetab.tab_identifier)
+        )
+
+        # update files list
+        for idx, f in enumerate(self.files):
+            if f.tab_identifier == old_file_identifier:
+                self.files[idx] = new_filetab
+                break
+
+    # query file tabs that are not modified
+    def get_unmodified_file_tabs(self) -> list[FileTab]:
+        unmodified_tabs = []
+        for file_tab in self.files:
+            curr_text_area = self.text_areas.get(file_tab.tab_identifier)
+            if curr_text_area is None:
+                continue
+            if file_tab.is_modified:
+                continue
+            curr_text = curr_text_area.get("0.0", "end-1c")
+            if curr_text == file_tab.editing_content:
+                unmodified_tabs.append(file_tab)
+        return unmodified_tabs
 
 
 class EditorFrame(ctk.CTkFrame):
@@ -555,8 +628,8 @@ class EditorFrame(ctk.CTkFrame):
     def get_text(self) -> str:
         return self.text_areas.get_text_area_str()
 
-    def handle_open_file(self, file_tab: str | None) -> None:
-        status = self.text_areas.add_file(file_tab)
+    def handle_open_file(self, file_tab: str | None, is_modified: bool = False) -> None:
+        status = self.text_areas.add_file(file_tab, is_modified=is_modified)
         if status:
             self.parse_current_chart()
         self._recall_beat_index()
@@ -812,10 +885,18 @@ class EditorFrame(ctk.CTkFrame):
             self.text_areas.opened_paths.add(path)
 
     def dump_session(self) -> EditorSessionData:
-        opened_files_paths: list[str] = []
+        opened_files_paths: list[tuple[str, bool]] = []
         for file_tab in self.text_areas.files:
             if file_tab.source_path is not None:
-                opened_files_paths.append(file_tab.source_path)
+                is_modified = False
+                curr_text_area = self.text_areas.text_areas.get(file_tab.tab_identifier)
+                if curr_text_area is not None:
+                    curr_text = curr_text_area.get("0.0", "end-1c")
+                    if curr_text != file_tab.editing_content:
+                        is_modified = True
+                if file_tab.is_modified:
+                    is_modified = True
+                opened_files_paths.append((file_tab.source_path, is_modified))
         return {
             "opened_files_paths": opened_files_paths,
         }
@@ -824,7 +905,9 @@ class EditorFrame(ctk.CTkFrame):
         opened_files_paths = data.get("opened_files_paths", [])
         self._delay_open_files(opened_files_paths)
 
-    def _delay_open_files(self, paths: list[str]) -> None:
+    def _delay_open_files(self, configs: list[tuple[str, bool]]) -> None:
         interval = 200  # milliseconds
-        for i, path in enumerate(paths):
-            self.after(i * interval, lambda p=path: self.handle_open_file(p))
+        for i, (path, is_modified) in enumerate(configs):
+            self.after(
+                i * interval, lambda p=path: self.handle_open_file(p, is_modified)
+            )
