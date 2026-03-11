@@ -927,5 +927,6 @@ class EditorFrame(ctk.CTkFrame):
         interval = 200  # milliseconds
         for i, (path, is_modified) in enumerate(configs):
             self.after(
-                i * interval, lambda p=path: self.handle_open_file(p, is_modified)
+                i * interval,
+                lambda p=path, m=is_modified: self.handle_open_file(p, m),
             )
