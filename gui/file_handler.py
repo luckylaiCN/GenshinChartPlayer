@@ -62,16 +62,14 @@ class FileTab:
             self.is_modified = True
 
     def save(self, path: str | None = None) -> None:
+        self.is_modified = True # always consider modified after save call
         if path is not None:
             self._save_to_file(path)
             self.source_path = path
         elif self.source_path is not None:
-            if not self.is_modified:
-                return
             self._save_to_file(self.source_path)
         else:
             raise ValueError("No path specified for saving the file.")
-        self.is_modified = False
 
     @staticmethod
     def new_tab() -> "FileTab":  # creates a new untitled tab

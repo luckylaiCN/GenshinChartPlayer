@@ -51,19 +51,43 @@ class FileFunctionalFrame(FunctionalFrame):
 
         self.open_folder_btn.pack(pady=10)
 
+        self.update_folder_btn = ctk.CTkButton(
+            self,
+            text="Update Directory",
+            command=self.update_directory_structure,
+            fg_color=curr_theme.BTN_PRIMARY,
+            text_color=curr_theme.TEXT_PRIMARY,
+        )
+        self.update_folder_btn.pack(pady=10)
+
     def open_folder_dialog(self):
         selected_path = ask_open_folder_dialog()
         if selected_path:
             self.target_path = selected_path
             self.update_directory_structure()
 
+    def set_target_path(self, path: str) -> None:
+        self.target_path = path
+        self.update_directory_structure()
+
     def update_directory_structure(self) -> None:
         if self.target_path is None:
             return
+
+        if not os.path.isdir(self.target_path):
+            return
+
         dir_dict = get_dicted_dir(self.target_path)
 
-        self.label.configure(text=f"Current Folder: \n{self.target_path}")
-        self.open_folder_btn.configure(text="Change Folder")
+        self.label.configure(
+            text=f"Current Folder: \n{self.target_path}",
+            text_color=curr_theme.TEXT_PRIMARY,
+        )
+        self.open_folder_btn.configure(
+            text="Change Folder",
+            fg_color=curr_theme.BTN_PRIMARY,
+            text_color=curr_theme.TEXT_PRIMARY,
+        )
 
         if self.tree_view is not None:
             self.tree_view.destroy()
@@ -106,6 +130,7 @@ class FileFunctionalFrame(FunctionalFrame):
 
         # bind selection event
         self.tree_view.bind("<Double-1>", self.on_double_click)
+        self.tree_view.bind("<Button-3>", self.on_right_click)
 
     def _populate_tree_view(
         self, tree_view: ttk.Treeview, parent: str, dir_dict: FolderType
@@ -116,6 +141,25 @@ class FileFunctionalFrame(FunctionalFrame):
                 self._populate_tree_view(tree_view, folder_id, content)
             else:
                 tree_view.insert(parent, "end", text=name)
+
+    def on_right_click(self, event) -> None:
+        print(f"right click recv, event: {event}")
+        tv = self.tree_view
+        if tv is None:
+            return 
+        item = tv.identify_element(event.x, event.y)
+        if item != "text":
+            return 
+        tv.selection_set(tv.identify_row(event.y))
+        self._show_context_menu(event)
+
+    def _show_context_menu(self, event) -> None:
+        if self.tree_view is None:
+            return
+        selection = self.tree_view.selection()[0]
+        if selection:
+            full_path = self._get_tree_full_path(selection)
+            print(f"show context menu for {full_path}")
 
     def on_double_click(self, event) -> None:
         if self.tree_view is None:
@@ -156,6 +200,15 @@ class FileFunctionalFrame(FunctionalFrame):
                 fieldbackground=bg_color,
                 foreground=text_color,
             )
+        self.label.configure(text_color=curr_theme.TEXT_PRIMARY)
+        self.open_folder_btn.configure(
+            fg_color=curr_theme.BTN_PRIMARY,
+            text_color=curr_theme.TEXT_PRIMARY,
+        )
+        self.update_folder_btn.configure(
+            fg_color=curr_theme.BTN_PRIMARY,
+            text_color=curr_theme.TEXT_PRIMARY,
+        )
 
 
 def get_base_name(path: str) -> str:

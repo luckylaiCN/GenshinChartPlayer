@@ -14,18 +14,33 @@ from gui.utils import ask_open_file_dialog, ask_save_file_dialog
 from shared.settings import ACCEPTED_FILE_EXTENSIONS
 from shared.utils import should_request_admin_privileges, ask_for_admin_privileges
 from player.handlers import imported_handler_modules
+from session.manager import JSONSessionManager
 
 
 class MainFrame(ctk.CTkFrame):
     master: ctk.CTk
     topmost: bool = False
+    jm: JSONSessionManager
 
     def __init__(self, master=None, **kwargs):
         super().__init__(master, **kwargs)
         self.configure(fg_color=curr_theme.BG_SECONDARY)
+        self.load_configurations()
         self.create_menu_bar()
         self.create_widgets()
-        self.defult_settings()
+        self.load_widget_configurations()
+        self.default_settings()
+
+    def load_configurations(self) -> None:
+        pass
+
+    def load_widget_configurations(self) -> None:
+        self.jm = JSONSessionManager()
+        self.jm.register_widget("editor", self.editor_frame)
+        self.jm.register_widget("sidebar", self.sidebar_frame)
+        self.jm.register_configuration("color_theme", curr_theme)
+        self.jm.load_configurations()
+        self.update_all_colors()
 
     def create_menu_bar(self):
         self.menubar = MenuBar(master=self)
@@ -87,6 +102,13 @@ class MainFrame(ctk.CTkFrame):
             menu_name="Format Chart",
             command=self.handle_format_chart,
             hotkey="<Alt-Shift-F>",
+        )
+
+        self.fake_space_menu_item = Menu(
+            master=self.edit_menu,
+            menu_name="Replace fake spaces",
+            command=self.handle_replace_fake_space,
+            hotkey="<Alt-Shift-H>",
         )
 
         # self.undo_menu_item = Menu(
@@ -197,6 +219,8 @@ class MainFrame(ctk.CTkFrame):
             master=self.player_menu,
             menu_name="Toggle Floating Display",
             command=self.toggle_floating_display,
+            hotkey="<F12>",
+            is_super_command=True,
         )
 
         if should_request_admin_privileges():
@@ -302,7 +326,7 @@ class MainFrame(ctk.CTkFrame):
     def toggle_appearance_mode(self, mode: str) -> None:
         ctk.set_appearance_mode(mode)
 
-    def defult_settings(self) -> None:
+    def default_settings(self) -> None:
         default_handler = "player.handlers.sound_h"
         if default_handler in imported_handler_modules.keys():
             self.set_handler(default_handler, silent=True)
@@ -313,6 +337,9 @@ class MainFrame(ctk.CTkFrame):
                 text="Some features may require administrator privileges. "
                 "You can reopen the application as administrator from the Settings menu.",
             )
+
+        # on destroy save session
+        self.master.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def player_handle_play(self) -> None:
         play_frame = self.sidebar_frame.get_functional_frame("Player")
@@ -354,3 +381,13 @@ class MainFrame(ctk.CTkFrame):
 
     def handle_format_chart(self) -> None:
         self.editor_frame.format_chart()
+
+    def handle_replace_fake_space(self) -> None:
+        self.editor_frame.remove_fake_spaces()
+
+    def on_close(self) -> None:
+        self.jm.save_configurations()
+        self.master.destroy()
+
+    def update_all_colors(self) -> None:
+        ctk.AppearanceModeTracker.update_callbacks()

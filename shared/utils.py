@@ -1,6 +1,8 @@
 import os
 import sys
 import ctypes
+import uuid
+import hashlib
 
 from enum import Enum
 
@@ -126,3 +128,25 @@ class FlagBoolean:
 
     def get(self) -> bool:
         return self.condition
+
+
+def get_system_unique_id() -> str:
+    def get_mac_address() -> str:
+        mac_num = format(uuid.getnode(), "012X")
+        mac = ":".join(mac_num[i : i + 2] for i in range(0, 12, 2))
+        return mac
+
+    def get_user_name() -> str:
+        return os.getenv("USERNAME") or os.getenv("USER") or get_mac_address()
+
+    unique_string = f"{get_mac_address()}_{get_user_name()}_{CURRENT_OS.value}"
+    unique_hash = hashlib.sha256(unique_string.encode(errors="ignore")).hexdigest()
+    return unique_hash
+
+
+SYSTEM_USER_UNIQUE_ID = get_system_unique_id()
+
+
+def is_fake_space(char: str):
+    ACCEPTABLE_SPACES = ["\n", "\r", " "]
+    return char.isspace() and char not in ACCEPTABLE_SPACES

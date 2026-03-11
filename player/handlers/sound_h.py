@@ -10,7 +10,6 @@ from shared.utils import AUDIO_DIR
 from playsound import playsound
 
 
-
 def handler(
     note_container: NoteContainer, cancel_flag: FlagBoolean, begin_time: float
 ) -> None:
@@ -19,7 +18,9 @@ def handler(
         # print(f"Playing sound for note: {note_container.note}")
         basename = note_container.note.token + ".mp3"
         audio_path = os.path.join(AUDIO_DIR, basename)
-        with suppress(UnicodeDecodeError): # sometimes playsound raises this error inexplicably on windows. Why?
+        with suppress(
+            UnicodeDecodeError
+        ):  # sometimes playsound raises this error inexplicably on windows. Why?
             playsound(audio_path)
 
 
@@ -35,4 +36,3 @@ def available() -> bool:
 
 def name() -> str:
     return "Sound playing"
-

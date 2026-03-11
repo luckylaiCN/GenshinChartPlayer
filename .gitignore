@@ -20,6 +20,10 @@ dev-requirements.txt
 
 # 3rd-party assets
 audio/
+audio.zip
 
 # scripts in development
 *-dev.py
+
+# session file
+.session.json

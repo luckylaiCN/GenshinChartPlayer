@@ -1,3 +1,4 @@
+import time
 import customtkinter as ctk
 import keyboard
 import threading
@@ -67,6 +68,7 @@ class Menu(ctk.CTkFrame):
 
         self.menu_name = menu_name
         self.sub_components = []
+        self.hot_key_label = None
 
         self._command = command
         if hotkey:
@@ -92,9 +94,10 @@ class Menu(ctk.CTkFrame):
 
         self.create_widgets()
         # if self._hook is not None:
-        #     self._reupdate_hook()   
+        #     self._reupdate_hook()
 
     def _hot_key_listener(self):
+        time.sleep(3)
         while self.winfo_exists():
             if self.hot_key_name:
                 if self._command is not None:
@@ -146,21 +149,39 @@ class Menu(ctk.CTkFrame):
             # height=25,
         )
 
-    def _focus_checker(self):
+    def _focus_checker(self, loop: bool = True):
         mouse_x, mouse_y = get_root_widget(self).winfo_pointerxy()
         wx = self.popup_menu.winfo_rootx()
         wy = self.popup_menu.winfo_rooty()
         ww = self.popup_menu.winfo_width()
         wh = self.popup_menu.winfo_height()
-        if not (wx <= mouse_x <= wx + ww and wy <= mouse_y <= wy + wh):
+
+        wx2 = self.button.winfo_rootx()
+        wy2 = self.button.winfo_rooty()
+        ww2 = self.button.winfo_width()
+        wh2 = self.button.winfo_height()
+
+        is_in_button = wx2 <= mouse_x <= wx2 + ww2 and wy2 <= mouse_y <= wy2 + wh2
+
+        is_in_frame = wx <= mouse_x <= wx + ww and wy <= mouse_y <= wy + wh
+
+        if not (is_in_frame or is_in_button):
             new_state = False
             if self.is_focused_in:
+                self.after(50, self._update_parents)
                 self.after(100, lambda: self._ask_for_close())
         else:
             new_state = True
+            if not self.is_focused_in:
+                self.after(50, self._update_parents)
         self.is_focused_in = new_state
 
-        self.after(100, self._focus_checker)
+        if loop:
+            self.after(100, self._focus_checker)
+
+    def _update_parents(self):  # fix: propagate focus state to parents
+        if self.parent_menu is not None:
+            self.parent_menu._focus_checker(False)
 
     def _ask_for_close(self):
         for item in self.sub_components:
@@ -168,8 +189,11 @@ class Menu(ctk.CTkFrame):
                 item._ask_for_close()
         if not self.is_open:
             return
+        if self.is_focused_in:
+            return
         if not self._query_mouse_focus_state():
             self._close()
+            self.after(100, self._update_parents)
 
     def _close_all(self):
         self._close()
@@ -267,6 +291,7 @@ class Menu(ctk.CTkFrame):
             )
             self.button.pack(side="left", fill="x", padx=(10, 0), expand=True)
             label.pack(side="right", padx=(0, 10))
+            self.hot_key_label = label
         else:
             self.button.pack(side="left", fill="x", padx=10, expand=True)
         sub_frame.pack(fill="x", expand=True)
@@ -303,6 +328,21 @@ class Menu(ctk.CTkFrame):
     def rename(self, new_name: str) -> None:
         self.menu_name = new_name
         self.button.configure(text=new_name)
+
+    def _set_appearance_mode(self, mode_string):
+        super()._set_appearance_mode(mode_string)
+        self.button.configure(
+            fg_color=curr_theme.BG_PRIMARY,
+            bg_color=curr_theme.BG_PRIMARY,
+            text_color=curr_theme.TEXT_PRIMARY,
+            hover_color=curr_theme.BG_HOVER,
+        )
+        if self.hot_key_label is not None:
+            self.hot_key_label.configure(
+                fg_color=curr_theme.BG_PRIMARY,
+                bg_color=curr_theme.BG_PRIMARY,
+                text_color=curr_theme.TEXT_SECONDARY,
+            )
 
 
 class Separator(ctk.CTkFrame):
