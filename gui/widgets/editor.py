@@ -18,6 +18,7 @@ from shared.utils import (
     OperationLockState,
     WARNING_CHARACTER,
     ERROR_CHARACTER,
+    is_fake_space,
 )
 
 
@@ -282,7 +283,7 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         self.on_switch_tab = on_tab_switch
         self.on_text_change = on_text_change
 
-    def on_close_tab(self, tab_name: str):
+    def on_close_tab(self, tab_name: str | None = None) -> None:
         if not global_operation_lock.is_free():
             if global_operation_lock.state == OperationLockState.PLAYING:
                 raise_toast(
@@ -294,6 +295,7 @@ class MultipleFileTabFrame(ctk.CTkTabview):
             if global_operation_lock.state == OperationLockState.PRACTICING:
                 # TODO: practice mode handling.
                 pass
+        tab_name = tab_name or self.get()
         tab_index = self.index(tab_name)
         auto_switch_index = (
             tab_index - 1
@@ -372,7 +374,7 @@ class MultipleFileTabFrame(ctk.CTkTabview):
             width=20,
             height=20,
             fg_color=curr_theme.ERROR_COLOR,
-            command=lambda: self.on_close_tab(tab_name),
+            command=lambda: self.on_close_tab(None),
         )
         # place close button at top right corner
         close_button.place(relx=1.0, x=-10, y=0, anchor="ne")
@@ -450,39 +452,11 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         if old_text_area is None:
             return
 
-        new_text = new_filetab.editing_content
-        # replace tabname
-        self.rename(old_file_identifier, new_filetab.tab_identifier)
-        self.set(new_filetab.tab_identifier)
-        # replace text area content
-        old_text_area.delete("0.0", "end")
-        old_text_area.insert("0.0", new_text)
-        old_text_area.edit_reset()
-        # update opened paths
-        old_filetab = self._get_opened_file_by_tabname(old_file_identifier)
-        if old_filetab is not None:
-            if old_filetab.source_path is not None:
-                self.opened_paths.discard(old_filetab.source_path)
-            if new_filetab.source_path is not None:
-                self.opened_paths.add(new_filetab.source_path)
-        # update key in text_areas dict
-        self.text_areas[new_filetab.tab_identifier] = self.text_areas.pop(
-            old_file_identifier
-        )
-        # update line numbers binding
-        self.text_areas[new_filetab.tab_identifier].line_numbers.update_line_numbers()
+        # new_text = new_filetab.editing_content
 
-        # update close button command
-        close_button = self.text_areas[new_filetab.tab_identifier].close_button
-        close_button.configure(
-            command=lambda: self.on_close_tab(new_filetab.tab_identifier)
-        )
-
-        # update files list
-        for idx, f in enumerate(self.files):
-            if f.tab_identifier == old_file_identifier:
-                self.files[idx] = new_filetab
-                break
+        # close old tab
+        self.on_close_tab(old_file_identifier)
+        self.add_file_tab(new_filetab)
 
     # query file tabs that are not modified
     def get_unmodified_file_tabs(self) -> list[FileTab]:
@@ -654,6 +628,28 @@ class EditorFrame(ctk.CTkFrame):
             return
         self.parse_current_chart(do_formatting=True)
 
+    def remove_fake_spaces(self):
+
+        curr_text = self.get_text()
+        new_text = ""
+        for char in curr_text:
+            if is_fake_space(char):
+                new_text += " "
+            else:
+                new_text += char
+
+        text_area = self.text_areas.curr_text_area
+        if text_area is None:
+            return
+
+        curr_index = text_area.index("insert")
+        text_area.delete("0.0", "end")
+        text_area.insert("0.0", new_text)
+        text_area.mark_set("insert", curr_index)
+        text_area.edit_modified(False)
+
+        self.parse_current_chart()
+
     def parse_current_chart(self, do_formatting: bool = False) -> None:
         self.runtime = None
         current_text = self.get_text()
@@ -663,6 +659,7 @@ class EditorFrame(ctk.CTkFrame):
         comments_str: list[tuple[str, str]] = []
         if current_text.strip() == "":
             return
+        self.highlight_fake_space()
         messages: list[EditorExceptionType] = []
         try:
             lines = parse_chart(current_text, do_formatting=do_formatting)
@@ -734,7 +731,13 @@ class EditorFrame(ctk.CTkFrame):
         self.command_frame.set_messages(messages)
 
     def reset_tags(self):
-        tags = ["error_tag", "warning_tag", "secondary_line", "comment_tag"]
+        tags = [
+            "error_tag",
+            "warning_tag",
+            "secondary_line",
+            "comment_tag",
+            "fake_space",
+        ]
         text_area = self.text_areas.curr_text_area
         if text_area is None:
             return
@@ -793,6 +796,20 @@ class EditorFrame(ctk.CTkFrame):
         )
         for begin_str, end_str in comments:
             text_area.tag_add(tag_name, f"{begin_str}", f"{end_str}")
+
+    def highlight_fake_space(self):
+        tag_name = "fake_space"
+        text_area = self.text_areas.curr_text_area
+        if text_area is None:
+            return
+        text_area.tag_remove(tag_name, "0.0", "end")
+        text_area.tag_config(
+            tag_name, background=self._apply_appearance_mode(curr_theme.WARNING_TAG_BG)
+        )
+        curr_text = self.get_text()
+        for index, char in enumerate(curr_text):
+            if is_fake_space(char):
+                text_area.tag_add(tag_name, f"0.0+{index}c", f"0.0+{index + 1}c")
 
     def handle_new_file(self) -> None:
         self.text_areas.add_file(None)

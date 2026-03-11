@@ -104,6 +104,13 @@ class MainFrame(ctk.CTkFrame):
             hotkey="<Alt-Shift-F>",
         )
 
+        self.fake_space_menu_item = Menu(
+            master=self.edit_menu,
+            menu_name="Replace fake spaces",
+            command=self.handle_replace_fake_space,
+            hotkey="<Alt-Shift-H>",
+        )
+
         # self.undo_menu_item = Menu(
         #     master=self.edit_menu,
         #     menu_name="Undo",
@@ -212,6 +219,8 @@ class MainFrame(ctk.CTkFrame):
             master=self.player_menu,
             menu_name="Toggle Floating Display",
             command=self.toggle_floating_display,
+            hotkey="<F12>",
+            is_super_command=True,
         )
 
         if should_request_admin_privileges():
@@ -372,6 +381,9 @@ class MainFrame(ctk.CTkFrame):
 
     def handle_format_chart(self) -> None:
         self.editor_frame.format_chart()
+
+    def handle_replace_fake_space(self) -> None:
+        self.editor_frame.remove_fake_spaces()
 
     def on_close(self) -> None:
         self.jm.save_configurations()

@@ -1,3 +1,4 @@
+import time
 import customtkinter as ctk
 import keyboard
 import threading
@@ -96,6 +97,7 @@ class Menu(ctk.CTkFrame):
         #     self._reupdate_hook()
 
     def _hot_key_listener(self):
+        time.sleep(3)
         while self.winfo_exists():
             if self.hot_key_name:
                 if self._command is not None:

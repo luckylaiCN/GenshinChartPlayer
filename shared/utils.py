@@ -145,3 +145,8 @@ def get_system_unique_id() -> str:
 
 
 SYSTEM_USER_UNIQUE_ID = get_system_unique_id()
+
+
+def is_fake_space(char: str):
+    ACCEPTABLE_SPACES = ["\n", "\r", " "]
+    return char.isspace() and char not in ACCEPTABLE_SPACES

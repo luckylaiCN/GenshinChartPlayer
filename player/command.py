@@ -20,7 +20,7 @@ class Command(ABC):
         Check if the command is valid in the current context.
         Returns True if valid, False otherwise.
         """
-        pass
+        return False
 
     def pass_args(self, args: list[str]) -> None:
         """
@@ -61,8 +61,13 @@ class CommandRegistry:
     _commands: dict[str, type[Command]] = {}
 
     @classmethod
-    def register_command(cls, name: str, command_cls: type[Command]) -> None:
-        cls._commands[name] = command_cls
+    def register_command(cls, command_cls: type[Command]) -> None:
+        cls._commands[command_cls._registered_name] = command_cls
+
+    @classmethod
+    def register_commands(cls, commands_cls: list[type[Command]]) -> None:
+        for cmd_cls in commands_cls:
+            cls.register_command(cmd_cls)
 
     @classmethod
     def get_command_class(cls, name: str) -> type[Command] | None:
@@ -100,7 +105,17 @@ class CMD_Set(Command):
             self.internal_property.bpm = float(self.args[1])
 
 
+class CMD_Author(Command):
+    _registered_name = "author"
+
+    def check_valid(self) -> bool:
+        return True
+
+    def execute(self) -> None:
+        return super().execute()
+
+
 default_command_registry = CommandRegistry()
-default_command_registry.register_command(CMD_Set._registered_name, CMD_Set)
+default_command_registry.register_commands([CMD_Set, CMD_Author])
 
 command_registry = default_command_registry  # exported registry instance
