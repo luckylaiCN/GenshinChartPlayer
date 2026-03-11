@@ -132,8 +132,8 @@ class FlagBoolean:
 
 def get_system_unique_id() -> str:
     def get_mac_address() -> str:
-        mac_num = hex(uuid.getnode()).replace("0x", "").upper()
-        mac = ":".join(mac_num[i : i + 2] for i in range(0, 11, 2))
+        mac_num = format(uuid.getnode(), "012X")
+        mac = ":".join(mac_num[i : i + 2] for i in range(0, 12, 2))
         return mac
 
     def get_user_name() -> str:
