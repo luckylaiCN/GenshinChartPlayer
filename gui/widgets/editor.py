@@ -631,12 +631,13 @@ class EditorFrame(ctk.CTkFrame):
     def remove_fake_spaces(self):
 
         curr_text = self.get_text()
-        new_text = ""
+        chars = []
         for char in curr_text:
             if is_fake_space(char):
-                new_text += " "
+                chars.append(" ")
             else:
-                new_text += char
+                chars.append(char)
+        new_text = "".join(chars)
 
         text_area = self.text_areas.curr_text_area
         if text_area is None:
