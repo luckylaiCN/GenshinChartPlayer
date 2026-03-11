@@ -374,7 +374,7 @@ class MultipleFileTabFrame(ctk.CTkTabview):
             width=20,
             height=20,
             fg_color=curr_theme.ERROR_COLOR,
-            command=lambda: self.on_close_tab(None),
+            command=lambda tn=tab_name: self.on_close_tab(tn),
         )
         # place close button at top right corner
         close_button.place(relx=1.0, x=-10, y=0, anchor="ne")
