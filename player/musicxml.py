@@ -32,8 +32,7 @@ class DurationNoteContainer:
             pitch = self.note.token
             music21_note = music21.note.Note(pitch)
             music21_note.duration.quarterLength = float(self.duration)
-            begin_time = self.begin_time + base_begin_beat
-            stream.insert(begin_time, music21_note)
+            stream.append(music21_note)
         elif isinstance(self.note, (ChordNote, ArpeggioNote)):
             # only support for all sub notes are single notes
             pitches = [
@@ -43,12 +42,11 @@ class DurationNoteContainer:
             ]
             music21_chord = music21.chord.Chord(pitches)
             music21_chord.duration.quarterLength = float(self.duration)
-            begin_time = self.begin_time + base_begin_beat
             # add mark for arpeggio
             if isinstance(self.note, ArpeggioNote):
                 arpeggio_mark = music21.expressions.ArpeggioMark("normal")
                 music21_chord.expressions.append(arpeggio_mark)
-            stream.insert(begin_time, music21_chord)
+            stream.append(music21_chord)
         elif isinstance(self.note, TupletNote):
             sub_notes = self.note.notes
             num_sub_notes = len(sub_notes)
@@ -58,25 +56,21 @@ class DurationNoteContainer:
                     pitch = sub_note.token
                     music21_note = music21.note.Note(pitch)
                     music21_note.duration.quarterLength = float(duration_per_sub_note)
-                    begin_time = self.begin_time + base_begin_beat
-                    stream.insert(begin_time, music21_note)
+                    stream.append(music21_note)
                 elif isinstance(sub_note, (ChordNote, ArpeggioNote)):
                     pitches = [
                         n.token for n in sub_note.notes if isinstance(n, SingleNote)
                     ]
                     music21_chord = music21.chord.Chord(pitches)
                     music21_chord.duration.quarterLength = float(duration_per_sub_note)
-                    begin_time = self.begin_time + base_begin_beat
-
                     if isinstance(sub_note, ArpeggioNote):
                         arpeggio_mark = music21.expressions.ArpeggioMark("normal")
                         music21_chord.expressions.append(arpeggio_mark)
-                    stream.insert(begin_time, music21_chord)
+                    stream.append(music21_chord)
                 else:
                     music21_rest = music21.note.Rest()
                     music21_rest.duration.quarterLength = float(duration_per_sub_note)
-                    begin_time = self.begin_time + base_begin_beat
-                    stream.insert(begin_time, music21_rest)
+                    stream.append(music21_rest)
         else:
             raise NotImplementedError(f"Unsupported note type: {type(self.note)}")
 
