@@ -10,7 +10,7 @@ from gui.widgets.menubar import MenuBar, Menu
 from gui.widgets.toast import raise_toast
 from gui.widgets.notification import raise_bottom_warning
 from gui.theme import curr_theme
-from gui.utils import ask_open_file_dialog, ask_save_file_dialog
+from gui.utils import ask_open_file_dialog, ask_save_file_dialog, show_file_in_explorer
 from shared.settings import ACCEPTED_FILE_EXTENSIONS
 from shared.utils import should_request_admin_privileges, ask_for_admin_privileges
 from player.handlers import imported_handler_modules
@@ -82,6 +82,19 @@ class MainFrame(ctk.CTkFrame):
             menu_name="Save As",
             command=self.save_current_file_as,
             hotkey="<Control-Shift-S>",
+        )
+        self.file_menu.add_separator()
+
+        self.export_musicxml_menu_item = Menu(
+            master=self.file_menu,
+            menu_name="Export MusicXML",
+            command=self.handle_editor_export_musicxml,
+        )
+
+        self.export_midi_menu_item = Menu(
+            master=self.file_menu,
+            menu_name="Export MIDI",
+            command=self.handle_editor_export_midi,
         )
 
         self.file_menu.add_separator()
@@ -360,6 +373,51 @@ class MainFrame(ctk.CTkFrame):
         play_frame = self.sidebar_frame.get_functional_frame("Player")
         if isinstance(play_frame, PlayFunctionalFrame):
             play_frame.request_play_from_start()
+
+    def handle_editor_export_musicxml(self) -> None:
+
+        stream = self.editor_frame.get_current_chart_musicxml_stream()
+        if stream is not None:
+            filename = f"{self.editor_frame.get_title()}.xml"
+            filepath = ask_save_file_dialog(["*.xml"], default_filename=filename)
+            if filepath is not None:
+                try:
+                    stream.write("musicxml", fp=filepath)
+                    raise_toast(
+                        master=self,
+                        message="MusicXML exported successfully.",
+                        duration=2000,
+                        position="center",
+                    )
+                    show_file_in_explorer(filepath)
+                except Exception as e:
+                    raise_bottom_warning(
+                        master=self,
+                        text=f"Failed to export MusicXML: {str(e)}",
+                    )
+
+    def handle_editor_export_midi(self) -> None:
+        stream = self.editor_frame.get_current_chart_musicxml_stream()
+
+        if stream is not None:
+            filename = f"{self.editor_frame.get_title()}.mid"
+            filepath = ask_save_file_dialog(["*.mid"], default_filename=filename)
+            if filepath is not None:
+                try:
+                    stream.write("midi", fp=filepath)
+                    raise_toast(
+                        master=self,
+                        message="MIDI exported successfully.",
+                        duration=2000,
+                        position="center",
+                    )
+                    show_file_in_explorer(filepath)
+
+                except Exception as e:
+                    raise_bottom_warning(
+                        master=self,
+                        text=f"Failed to export MIDI: {str(e)}",
+                    )
 
     def handle_reopen_asministrator(self) -> None:
         if should_request_admin_privileges():
