@@ -102,11 +102,9 @@ def get_notes_partial_pattern_in_beat(beat: Beat) -> list[DurationNoteContainer]
             should_continue = False
             continue
 
-        if isinstance(note, ContinuousNote) and should_continue:
-            if len(durations) == 0:
-                continue  # skip leading continue notes
-            durations[-1] += min_duration
-            should_continue = True
+        if isinstance(note, (ContinuousNote)):
+            if should_continue:
+                durations[-1] += min_duration
             continue  # skip continue notes, they will be handled in the next step
 
         result_notes.append(note)
