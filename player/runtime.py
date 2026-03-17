@@ -1,8 +1,11 @@
 import time
 
+import music21
+
 from typing import Callable
 
 from chart.parser import Line, BeatLine, CommandLine
+from chart.beat import Beat
 
 # from chart.note import SingleNote
 from player.interal import InternalProperty
@@ -13,12 +16,13 @@ from player.command import (
     CommandParseErrorInfo,
     CommandParseException,
 )
-from player.utils import  wait_until_or_cancel
+from player.utils import wait_until_or_cancel
 from player.pattern import (
     PatternMismatchException,
     PatternMismatchWarning,
     PatternMismatchInfo,
 )
+from player.musicxml import get_notes_partial_pattern_in_beat
 from shared.utils import FlagBoolean
 
 import threading
@@ -26,6 +30,7 @@ import threading
 
 class BeatContainer:
     beat_id: int
+    beat_obj: Beat
     notes: list[NoteContainer]
     begin_time: float = 0.0  # in seconds
     bpm: float = 120.0
@@ -36,6 +41,7 @@ class BeatContainer:
     def __init__(
         self,
         beat_id: int,
+        beat_obj: Beat,
         notes: list[NoteContainer],
         begin_time: float = 0.0,
         bpm: float = 120.0,
@@ -44,6 +50,7 @@ class BeatContainer:
         line: int = -1,
     ) -> None:
         self.beat_id = beat_id
+        self.beat_obj = beat_obj
         self.notes = notes
         self.bpm = bpm
         self.begin_time = begin_time
@@ -102,6 +109,7 @@ class ChartRuntime:
                         ncs.append(nc_absolute)
                     beat_container = BeatContainer(
                         beat_id=len(self.playlist),
+                        beat_obj=beat,
                         notes=ncs,
                         begin_time=current_time,
                         begin_str=beat.begin_str or "",
@@ -110,7 +118,7 @@ class ChartRuntime:
                         line=index,
                     )
                     self.playlist.append(beat_container)
-                    beat_duration = 60.0 / current_ip.bpm
+                    beat_duration = 60.0 / current_ip.bpm / current_ip.speed_multiplier
                     current_time += beat_duration
             elif isinstance(line, CommandLine):
                 try:
@@ -126,8 +134,51 @@ class ChartRuntime:
         if len(warnings) > 0:
             raise PatternMismatchException(warnings)
 
+        self.internal_property = current_ip
+
     def get_playlist(self) -> list[BeatContainer]:
         return self.playlist
+
+    def get_xml_stream(
+        self, file_name: str = "Untitled"
+    ) -> music21.stream.Stream | None:
+        try:
+            self.caculate_playlist()  # Ensure the playlist is up to date before generating the stream
+        except Exception:
+            return None
+        stream = music21.stream.Stream()
+        meta = music21.metadata.Metadata()
+        meta.title = file_name
+        meta.composer = self.internal_property.author
+        stream.insert(0, meta)
+        if len(self.playlist) == 0:
+            return stream
+        curr_bpm = 0
+        for beat_container in self.playlist:
+            if beat_container.bpm != curr_bpm:
+                stream.append(music21.tempo.MetronomeMark(number=beat_container.bpm))
+                curr_bpm = beat_container.bpm
+            beat = beat_container.beat_obj
+            note_containers = get_notes_partial_pattern_in_beat(beat)
+            length = len(note_containers)
+            if length == 0:
+                rest = music21.note.Rest()
+                rest.duration.quarterLength = 1.0
+                stream.append(rest)
+                continue
+            if note_containers[0].begin_time > 0:
+                rest = music21.note.Rest()
+                rest.duration.quarterLength = note_containers[0].begin_time
+                stream.append(rest)
+            for index, note_container in enumerate(note_containers):
+                note_container.apply_to_stream(stream, index)
+            if note_containers[-1].begin_time + note_containers[-1].duration < 1.0:
+                rest = music21.note.Rest()
+                rest.duration.quarterLength = 1.0 - (
+                    note_containers[-1].begin_time + note_containers[-1].duration
+                )
+                stream.append(rest)
+        return stream
 
 
 NotePlayHandler = Callable[

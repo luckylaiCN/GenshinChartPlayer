@@ -10,7 +10,7 @@ from gui.widgets.toast import raise_toast
 from gui.widgets.floating import FloatingChartDisplay
 from shared.utils import global_operation_lock, OperationLockState, FlagBoolean
 from player.runtime import PlayerThreadingPool
-from player.handlers import imported_handler_modules
+from player.handlers import imported_handler_modules, fallback_module
 from player.practice import PracticeController
 
 PLAY_CHARACTER = "▶"
@@ -29,6 +29,7 @@ class PlayFunctionalFrame(FunctionalFrame):
     begin_time: float = 0.0
     floating_display: FloatingChartDisplay | None = None
     floating_display_visible: FlagBoolean = FlagBoolean(False)
+    chart_speed: float = 1.0
 
     def bind_editor(self, editor: EditorFrame) -> None:
         self.binded_editor = editor
@@ -39,7 +40,9 @@ class PlayFunctionalFrame(FunctionalFrame):
 
     @property
     def handler_string(self) -> str:
-        handler = imported_handler_modules.get(self.handler_name, None)
+        handler = imported_handler_modules.get(
+            self.handler_name, fallback_module
+        )
         if handler is None:
             return "No Handler"
         return handler.name()
@@ -96,7 +99,29 @@ class PlayFunctionalFrame(FunctionalFrame):
 
         self.pratice_mode_button.pack(pady=10)
 
+        # speed slider
+        self.speed_label = ctk.CTkLabel(
+            self,
+            text="Speed 1.0x",
+            text_color=curr_theme.TEXT_PRIMARY,
+        )
+        self.speed_slider = ctk.CTkSlider(
+            self,
+            number_of_steps=15,
+            command=self.on_speed_change,
+        )
+
         self.bind("<Destroy>", lambda e: self._on_destroy())
+
+        self.speed_label.pack(pady=5)
+        self.speed_slider.pack(pady=5)
+
+    def on_speed_change(self, value: float) -> None:
+        min_speed = 0.5
+        max_speed = 2.0
+        speed = min_speed + (max_speed - min_speed) * value
+        self.speed_label.configure(text=f"Speed {speed:.2f}x")
+        self.chart_speed = speed
 
     def _check_before_playing(self) -> bool:
         if self.binded_editor is None:
@@ -137,6 +162,11 @@ class PlayFunctionalFrame(FunctionalFrame):
             return False
 
         self.is_playing = True
+        # disable speed change during playing, as it may cause unexpected issues. can be changed in the future if needed.
+        self.speed_slider.configure(state="disabled")
+        ip = runtime.internal_property
+        ip.set_speed_multiplier(self.chart_speed)
+        runtime.caculate_playlist()
         self.play_pause_button.configure(text=PAUSE_CHARACTER)
         global_operation_lock.set_state(OperationLockState.PLAYING)
         self.ptp = PlayerThreadingPool(
@@ -208,6 +238,7 @@ class PlayFunctionalFrame(FunctionalFrame):
         self.is_playing = False
         self.play_pause_button.configure(text=PLAY_CHARACTER)
         global_operation_lock.release()
+        self.speed_slider.configure(state="normal")
 
     def handle_play_pause(self):
         if not self._check_before_playing():

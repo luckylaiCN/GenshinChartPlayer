@@ -284,6 +284,12 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         self.on_text_change = on_text_change
 
     def on_close_tab(self, tab_name: str | None = None) -> None:
+        """
+        Close the tab with the given name. If no name is provided, close the current tab.
+        This is called when the close button on a tab is clicked.
+        The param tab_name is a design mistake, as the close button always applies to the current tab,
+             but it is kept for now to avoid refactoring the close button command.
+        """
         if not global_operation_lock.is_free():
             if global_operation_lock.state == OperationLockState.PLAYING:
                 raise_toast(
@@ -296,7 +302,15 @@ class MultipleFileTabFrame(ctk.CTkTabview):
                 # TODO: practice mode handling.
                 pass
         tab_name = tab_name or self.get()
-        tab_index = self.index(tab_name)
+        try:
+            tab_index = self.index(tab_name)
+        except ValueError:
+            # overwrite to real tab name. This exception happens because the tab is renamed
+            #   but the close button command is not updated accordingly,
+            #   which is a design mistake but can be tolerated for now.
+            tab_name = self.get()
+            tab_index = self.index(tab_name)
+            return
         auto_switch_index = (
             tab_index - 1
             if tab_index > 0
@@ -607,6 +621,31 @@ class EditorFrame(ctk.CTkFrame):
         if status:
             self.parse_current_chart()
         self._recall_beat_index()
+
+    def get_current_chart_musicxml_stream(self):
+        if self.runtime is None:
+            return None
+        tab = self.text_areas.get_current_file_tab()
+        name_ext = (
+            os.path.basename(tab.source_path) if tab and tab.source_path else "Untitled"
+        )
+        file_name, _ = os.path.splitext(name_ext)
+        stream = self.runtime.get_xml_stream(file_name=file_name)
+        return stream
+
+    def get_title(self) -> str:
+        tab = self.text_areas.get_current_file_tab()
+        if tab is None:
+            return "Untitled"
+        if tab.source_path is not None:
+            name_ext = (
+                os.path.basename(tab.source_path)
+                if tab and tab.source_path
+                else "Untitled"
+            )
+            file_name, _ = os.path.splitext(name_ext)
+            return file_name
+        return "Untitled"
 
     def format_chart(self) -> None:
         # reject if playing, practicing or no tab opened

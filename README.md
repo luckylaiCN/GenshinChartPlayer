@@ -48,7 +48,7 @@ python main.py
 
 This project does not include any audio files. Users must provide their own audio files for the charts they wish to play. Ensure that you have the legal right to use any audio files you incorporate into your charts.
 
-To add audio files to your charts, place them in the project directory `audio/` and name them with their key signatures (from `C3` to `B6`, sharps are not included). Files should be in `.mp3` format.
+To add audio files to your charts, place them in the project directory `audio/` and name them with their key signatures (from `C3` to `B5`, sharps are not included). Files should be in `.mp3` format.
 
 The default handler is located in [`player/handlers/sound_h.py`](https://github.com/luckylaiCN/GenshinChartPlayer/blob/main/player/handlers/sound_h.py).
 

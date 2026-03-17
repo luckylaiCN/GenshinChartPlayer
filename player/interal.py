@@ -9,12 +9,31 @@ class InternalProperty:
     """
 
     bpm: float = 120.0  # Default BPM
-    time_signature: Literal[3, 4] = 4  # Default time signature (4/4)
+    time_signature: Literal[4] = 4  # Default time signature (4/4)
+    speed_multiplier: float = 1.0  # Default speed multiplier
+    author: str = "Unknown Artist"  # Default author name
 
-    def __init__(self, bpm: float = 120.0, time_signature: Literal[3, 4] = 4) -> None:
+    def __init__(
+        self,
+        bpm: float = 120.0,
+        time_signature: Literal[4] = 4, # deprecated, will be removed in future versions.
+        speed_multiplier: float = 1.0,
+        author: str = "Unknown Artist",
+    ) -> None:
         self.bpm = bpm
         self.time_signature = time_signature
+        self.speed_multiplier = speed_multiplier
+        self.author = author
+
+    def set_speed_multiplier(self, multiplier: float) -> None:
+        """Set the speed multiplier for the chart."""
+        self.speed_multiplier = multiplier
 
     def copy(self) -> "InternalProperty":
         """Create a copy of the InternalProperty instance."""
-        return InternalProperty(bpm=self.bpm, time_signature=self.time_signature)
+        return InternalProperty(
+            bpm=self.bpm,
+            time_signature=self.time_signature,
+            speed_multiplier=self.speed_multiplier,
+            author=self.author,
+        )

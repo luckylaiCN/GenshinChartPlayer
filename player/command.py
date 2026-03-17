@@ -112,7 +112,8 @@ class CMD_Author(Command):
         return True
 
     def execute(self) -> None:
-        return super().execute()
+        author_name = self.args[0] if len(self.args) > 0 else "Unknown Artist"
+        self.internal_property.author = author_name
 
 
 default_command_registry = CommandRegistry()

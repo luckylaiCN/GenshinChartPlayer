@@ -1,4 +1,6 @@
 import os
+import sys
+import subprocess
 import tkinter as tk
 import inspect
 
@@ -43,12 +45,14 @@ def ask_open_file_dialog(exts: list[str]) -> str | None:
     return None
 
 
-def ask_save_file_dialog(exts: list[str]) -> str | None:
+def ask_save_file_dialog(exts: list[str], default_filename: str = "") -> str | None:
     """Open a save file dialog and return the selected file path."""
     root = tk.Tk()
     root.withdraw()  # Hide the root window
     file_path = filedialog.asksaveasfilename(
-        defaultextension=exts[0], filetypes=[("Supported Files", exts)]
+        defaultextension=exts[0],
+        filetypes=[("Supported Files", exts)],
+        initialfile=default_filename,
     )
     root.destroy()
     if len(file_path) == 0:
@@ -58,6 +62,30 @@ def ask_save_file_dialog(exts: list[str]) -> str | None:
     if file_path:
         return os.path.abspath(file_path)
     return None
+
+
+def show_file_in_explorer(file_path: str) -> None:
+    """Open the system file explorer and show the specified file.
+    On Windows and macOS, this will attempt to select/highlight the file.
+    On other platforms (for example, many Linux desktop environments), this
+    may only open the containing directory.
+    """
+    if os.path.exists(file_path):
+        if os.name == "nt":  # Windows
+            try:
+                subprocess.run(["explorer", "/select,", file_path])
+            except Exception as e:
+                print(f"Error opening file explorer: {e}")
+        elif os.name == "posix":  # macOS and Linux
+            try:
+                if sys.platform == "darwin":  # macOS
+                    subprocess.run(["open", "-R", file_path])
+                else:  # Linux
+                    subprocess.run(["xdg-open", os.path.dirname(file_path)])
+            except Exception as e:
+                print(f"Error opening file explorer: {e}")
+    else:
+        print(f"File does not exist: {file_path}")
 
 
 def translate_tkinter_bind_to_hotkey(bind_str: str) -> str:

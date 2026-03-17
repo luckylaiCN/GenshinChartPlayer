@@ -18,6 +18,7 @@ class HandlerProtocol(Protocol):
 # Dynamically import all handler modules in the current package
 handler_modules = [
     "player.handlers.sound_h",
+    "player.handlers.donothing_h",
     "player.handlers.keyboard_h",
 ]
 
@@ -60,4 +61,16 @@ for module_name in handler_modules:
     if module is not None:
         imported_handler_modules[module_name] = module
 
-__all__ = ["imported_handler_modules", "HandlerProtocol"]
+fallback_handler_module_name = "player.handlers.donothing_h"
+if fallback_handler_module_name not in imported_handler_modules:
+    fallback_module = import_safe(fallback_handler_module_name)
+    if fallback_module is not None:
+        imported_handler_modules[fallback_handler_module_name] = fallback_module
+    else:
+        raise ImportError(
+            f"Failed to import fallback handler module '{fallback_handler_module_name}'. No valid handlers available."
+        )
+    
+fallback_module = imported_handler_modules[fallback_handler_module_name]
+
+__all__ = ["imported_handler_modules", "HandlerProtocol", "fallback_module"]
