@@ -9,14 +9,14 @@ class InternalProperty:
     """
 
     bpm: float = 120.0  # Default BPM
-    time_signature: Literal[3, 4] = 4  # Default time signature (4/4)
+    time_signature: Literal[4] = 4  # Default time signature (4/4)
     speed_multiplier: float = 1.0  # Default speed multiplier
     author: str = "Unknown Artist"  # Default author name
 
     def __init__(
         self,
         bpm: float = 120.0,
-        time_signature: Literal[3, 4] = 4,
+        time_signature: Literal[4] = 4, # deprecated, will be removed in future versions.
         speed_multiplier: float = 1.0,
         author: str = "Unknown Artist",
     ) -> None:

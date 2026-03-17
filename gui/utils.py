@@ -65,10 +65,17 @@ def ask_save_file_dialog(exts: list[str], default_filename: str = "") -> str | N
 
 
 def show_file_in_explorer(file_path: str) -> None:
-    """Open the file explorer and select the specified file."""
+    """Open the system file explorer and show the specified file.
+    On Windows and macOS, this will attempt to select/highlight the file.
+    On other platforms (for example, many Linux desktop environments), this
+    may only open the containing directory.
+    """
     if os.path.exists(file_path):
         if os.name == "nt":  # Windows
-            os.startfile(os.path.dirname(file_path))
+            try:
+                subprocess.run(["explorer", "/select,", file_path])
+            except Exception as e:
+                print(f"Error opening file explorer: {e}")
         elif os.name == "posix":  # macOS and Linux
             try:
                 if sys.platform == "darwin":  # macOS

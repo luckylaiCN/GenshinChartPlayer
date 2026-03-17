@@ -395,6 +395,11 @@ class MainFrame(ctk.CTkFrame):
                         master=self,
                         text=f"Failed to export MusicXML: {str(e)}",
                     )
+        else:
+            raise_bottom_warning(
+                master=self,
+                text="Failed to export MusicXML: No valid chart data found.",
+            )
 
     def handle_editor_export_midi(self) -> None:
         stream = self.editor_frame.get_current_chart_musicxml_stream()
@@ -418,6 +423,12 @@ class MainFrame(ctk.CTkFrame):
                         master=self,
                         text=f"Failed to export MIDI: {str(e)}",
                     )
+
+        else:
+            raise_bottom_warning(
+                master=self,
+                text="Failed to export MIDI: No valid chart data found.",
+            )
 
     def handle_reopen_asministrator(self) -> None:
         if should_request_admin_privileges():
