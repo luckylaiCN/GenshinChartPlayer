@@ -27,3 +27,10 @@ audio.zip
 
 # session file
 .session.json
+
+# vs code settings
+.vscode/
+
+# music files
+*.mid
+*.xml

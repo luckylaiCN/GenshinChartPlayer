@@ -22,7 +22,10 @@ from player.pattern import (
     PatternMismatchWarning,
     PatternMismatchInfo,
 )
-from player.musicxml import get_notes_partial_pattern_in_beat
+from player.musicxml import (
+    get_notes_partial_pattern_in_beat,
+    divide_into_melody_and_chords,
+)
 from shared.utils import FlagBoolean
 
 import threading
@@ -147,10 +150,7 @@ class ChartRuntime:
         except Exception:
             return None
         stream = music21.stream.Stream()
-        meta = music21.metadata.Metadata()
-        meta.title = file_name
-        meta.composer = self.internal_property.author
-        stream.insert(0, meta)
+
         if len(self.playlist) == 0:
             return stream
         curr_bpm = 0
@@ -178,6 +178,12 @@ class ChartRuntime:
                     note_containers[-1].begin_time + note_containers[-1].duration
                 )
                 stream.append(rest)
+
+        stream = divide_into_melody_and_chords(stream)
+        meta = music21.metadata.Metadata()
+        meta.title = file_name
+        meta.composer = self.internal_property.author
+        stream.insert(0, meta)
         return stream
 
 
