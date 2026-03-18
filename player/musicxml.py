@@ -1,6 +1,7 @@
 import music21
 
 from fractions import Fraction
+from typing import Literal
 
 from chart.beat import Beat
 from chart.note import (
@@ -34,12 +35,14 @@ class DurationNoteContainer:
             music21_note.duration.quarterLength = float(self.duration)
             stream.append(music21_note)
         elif isinstance(self.note, (ChordNote, ArpeggioNote)):
-            # only support for all sub notes are single notes
-            pitches = [
-                sub_note.token
-                for sub_note in self.note.notes
-                if isinstance(sub_note, SingleNote)
-            ]
+            pitches = []
+            for n in self.note.notes:
+                if isinstance(n, SingleNote):
+                    pitches.append(n.token)
+                if isinstance(n, ChordNote):
+                    for sub_n in n.notes:
+                        if isinstance(sub_n, SingleNote):
+                            pitches.append(sub_n.token)
             music21_chord = music21.chord.Chord(pitches)
             music21_chord.duration.quarterLength = float(self.duration)
             # add mark for arpeggio
@@ -58,9 +61,14 @@ class DurationNoteContainer:
                     music21_note.duration.quarterLength = float(duration_per_sub_note)
                     stream.append(music21_note)
                 elif isinstance(sub_note, (ChordNote, ArpeggioNote)):
-                    pitches = [
-                        n.token for n in sub_note.notes if isinstance(n, SingleNote)
-                    ]
+                    pitches = []
+                    for n in sub_note.notes:
+                        if isinstance(n, SingleNote):
+                            pitches.append(n.token)
+                        if isinstance(n, ChordNote):
+                            for sub_n in n.notes:
+                                if isinstance(sub_n, SingleNote):
+                                    pitches.append(sub_n.token)
                     music21_chord = music21.chord.Chord(pitches)
                     music21_chord.duration.quarterLength = float(duration_per_sub_note)
                     if isinstance(sub_note, ArpeggioNote):
@@ -126,3 +134,427 @@ def get_notes_partial_pattern_in_beat(beat: Beat) -> list[DurationNoteContainer]
         note_containers.append(DurationNoteContainer(note, begin_time, duration))
 
     return note_containers
+
+
+def get_pitch_num(note: music21.note.Note) -> int:
+    """Convert a music21 note to a MIDI pitch number."""
+    return note.pitch.midi
+
+
+def build_part_from_pitches_and_begin_times(
+    pitches: list[tuple[list[int], Literal["Note", "Chord", "Arpeggio"]]],
+    begin_times: list[Fraction],
+    full_time: Fraction,
+) -> music21.stream.Part:
+    """Build a music21 part from a list of pitches and begin times.
+    Fixes duration according to begin times between notes, and fills the rest with rests.
+    """
+    part = music21.stream.Part()
+
+    if len(pitches) == 0:
+        added_time = 0
+        while added_time < full_time:
+            rest = music21.note.Rest()
+            rest.duration.quarterLength = float(min(full_time - added_time, 4))
+            added_time += min(full_time - added_time, 4)
+        part.append(rest)
+        return part
+
+    # add duration before the first note if the first note does not start at the beginning of the beat
+    if begin_times[0] > 0:
+        added_time = 0
+        while added_time < begin_times[0]:
+            rest = music21.note.Rest()
+            rest.duration.quarterLength = float(min(begin_times[0] - added_time, 4))
+            added_time += min(begin_times[0] - added_time, 4)
+            part.append(rest)
+
+    fix_duartion = 4
+    # default duration is 4 beats, which is the whole beat, will be fixed later according to begin times between notes
+    index = 0
+    while index < len(pitches) - 1:
+        current_pitches, current_type = pitches[index]
+        current_time = begin_times[index]
+        next_time = begin_times[index + 1]
+        est_duration = next_time - current_time
+        duration = min(est_duration, fix_duartion)
+        # end_time = current_time + duration
+        # # remove decimal part of end_time
+        # end_time_rounded = int(end_time)
+        # duration = end_time_rounded - current_time
+        is_duartion_covered = est_duration == duration
+        if current_type == "Note":
+            music21_note = music21.note.Note(current_pitches[0])
+            music21_note.duration.quarterLength = duration
+            # remove accidental if the pitch is natural
+            if (
+                music21_note.pitch.accidental is not None
+                and music21_note.pitch.accidental.name == "natural"
+            ):
+                music21_note.pitch.accidental = None
+            part.append(music21_note)
+        elif current_type == "Chord":
+            music21_chord = music21.chord.Chord(current_pitches)
+            music21_chord.duration.quarterLength = duration
+            # remove accidental if the pitch is natural
+            for note in music21_chord.notes:
+                if (
+                    note.pitch.accidental is not None
+                    and note.pitch.accidental.name == "natural"
+                ):
+                    note.pitch.accidental = None
+
+            part.append(music21_chord)
+        elif current_type == "Arpeggio":
+            music21_chord = music21.chord.Chord(current_pitches)
+            music21_chord.duration.quarterLength = duration
+            arpeggio_mark = music21.expressions.ArpeggioMark("normal")
+            # remove accidental if the pitch is natural
+            for note in music21_chord.notes:
+                if (
+                    note.pitch.accidental is not None
+                    and note.pitch.accidental.name == "natural"
+                ):
+                    note.pitch.accidental = None
+            music21_chord.expressions.append(arpeggio_mark)
+            part.append(music21_chord)
+        if not is_duartion_covered:
+            added_time = 0
+            while added_time < est_duration - duration:
+                rest = music21.note.Rest()
+                rest.duration.quarterLength = float(
+                    min(est_duration - duration - added_time, 4)
+                )
+                added_time += min(est_duration - duration - added_time, 4)
+                part.append(rest)
+
+        index += 1
+
+    # handle last note
+    last_pitches, last_type = pitches[-1]
+    last_time = begin_times[-1]
+    est_duration = full_time - last_time
+    duration = min(est_duration, fix_duartion)
+    is_duartion_covered = est_duration == duration
+    if last_type == "Note":
+        music21_note = music21.note.Note(last_pitches[0])
+        music21_note.duration.quarterLength = duration
+        # remove accidental if the pitch is natural
+        if (
+            music21_note.pitch.accidental is not None
+            and music21_note.pitch.accidental.name == "natural"
+        ):
+            music21_note.pitch.accidental = None
+        part.append(music21_note)
+    elif last_type == "Chord":
+        music21_chord = music21.chord.Chord(last_pitches)
+        music21_chord.duration.quarterLength = duration
+        # remove accidental if the pitch is natural
+        for note in music21_chord.notes:
+            if (
+                note.pitch.accidental is not None
+                and note.pitch.accidental.name == "natural"
+            ):
+                note.pitch.accidental = None
+        part.append(music21_chord)
+    elif last_type == "Arpeggio":
+        music21_chord = music21.chord.Chord(last_pitches)
+        music21_chord.duration.quarterLength = duration
+        arpeggio_mark = music21.expressions.ArpeggioMark("normal")
+        # remove accidental if the pitch is natural
+        for note in music21_chord.notes:
+            if (
+                note.pitch.accidental is not None
+                and note.pitch.accidental.name == "natural"
+            ):
+                note.pitch.accidental = None
+        music21_chord.expressions.append(arpeggio_mark)
+        part.append(music21_chord)
+    if not is_duartion_covered:
+        added_time = 0
+        while added_time < full_time - last_time - fix_duartion:
+            rest = music21.note.Rest()
+            rest.duration.quarterLength = float(
+                min(est_duration - duration - added_time, 4)
+            )
+            added_time += min(est_duration - duration - added_time, 4)
+            part.append(rest)
+
+    return part
+
+
+def melody_chord_split(pitches: list[int]) -> tuple[list[int], list[int]]:
+    """Split a list of pitches into a melody pitch and a chord pitch according to the distance between pitches."""
+
+    if len(pitches) == 1:
+        return pitches, []
+
+    highest_pitch = max(pitches)
+    lowest_pitch = min(pitches)
+
+    if highest_pitch - lowest_pitch < 8:
+        return pitches, []
+
+    melodies = []
+    chords = []
+    for pitch in pitches:
+        if abs(pitch - highest_pitch) < abs(pitch - lowest_pitch):
+            melodies.append(pitch)
+        else:
+            chords.append(pitch)
+    return melodies, chords
+
+
+def is_tuplet_duration(duration: Fraction) -> bool:
+    """Check if the given duration is a tuplet duration."""
+    standard_denominators = [1, 2, 4, 8, 16, 32, 64]
+    return duration.denominator not in standard_denominators
+
+
+def divide_into_melody_and_chords(
+    stream: music21.stream.Stream,
+) -> music21.stream.Stream:
+    """Divide a music21 stream into a melody stream and a chord stream."""
+    result_stream = music21.stream.Stream()
+
+    melody_tolerance = 10  # minor seventh
+    chord_tolerance = 9  # major sixth
+
+    melody_degree_tolerance_pitch = get_pitch_num(music21.note.Note("B4"))
+
+    current_pitch = 0
+
+    tempo_indexs: list[tuple[Fraction, float]] = []
+    note_begin_times: list[Fraction] = []
+    note_pitches: list[int] = []
+    notes: list[music21.note.Note | music21.chord.Chord] = []
+
+    melody_indexes: list[int] = []
+
+    full_time = stream.highestTime
+
+    for element in stream.recurse():
+        if isinstance(element, music21.tempo.MetronomeMark):
+            tempo_indexs.append(
+                (Fraction(element.offset).limit_denominator(64), element.number)
+            )
+        elif isinstance(element, (music21.note.Note, music21.chord.Chord)):
+            note_begin_times.append(Fraction(element.offset).limit_denominator(64))
+            if isinstance(element, music21.note.Note):
+                pitch_num = get_pitch_num(element)
+                note_pitches.append(pitch_num)
+                notes.append(element)
+            else:  # chord
+                pitch_num = max(get_pitch_num(n) for n in element.notes)
+                note_pitches.append(pitch_num)
+                notes.append(element)
+
+    if len(notes) < 2:
+        return stream
+
+    # first_pitch, second_pitch = note_pitches[0], note_pitches[1]
+
+    # determine if the first note or the second note is the melody note based on the pitch difference
+
+    note_index = 0
+    # melody_begin_index = 0
+
+    # if second_pitch - first_pitch >= chord_tolerance:
+    #     melody_begin_index = 1 # the second note is the melody note
+
+    # melody_indexes.append(melody_begin_index)
+    # note_index = melody_begin_index + 1
+
+    # the codes above is merged into the while loop below.
+
+    last_is_melody = False
+    note_process_length = len(notes) - 1
+    recent_notes_pitches: list[int] = []
+    while note_index < note_process_length:
+        current_pitch = note_pitches[note_index]
+        next_pitch = note_pitches[note_index + 1]
+        diff = next_pitch - current_pitch
+
+        duration = notes[note_index].duration.quarterLength
+        fraction_division = Fraction(duration).limit_denominator(64)
+        if is_tuplet_duration(fraction_division):
+            # if the duration is not a standard duration, consider it as a tuplet note,
+            # keep the same melody/chord status as the last note, and skip the duration check for this note.
+            if last_is_melody:
+                melody_indexes.append(note_index)
+            note_index += 1
+            continue
+
+        last_is_melody = True
+
+        # recent_notes_pitches are note pitches that are distance < 8 beats in the melody.
+        recent_notes_pitches = []
+        for index in range(len(melody_indexes) - 1, -1, -1):
+            if (
+                note_begin_times[note_index] - note_begin_times[melody_indexes[index]]
+                < 8
+            ):
+                recent_notes_pitches.append(note_pitches[melody_indexes[index]])
+            else:
+                break
+
+        if recent_notes_pitches:
+            average_recent_pitch = sum(recent_notes_pitches) / len(recent_notes_pitches)
+            avergae_diff = average_recent_pitch - current_pitch
+
+            if avergae_diff <= melody_tolerance:
+                if note_pitches[melody_indexes[-1]] - current_pitch < chord_tolerance:
+                    melody_indexes.append(note_index)
+                    note_index += 1
+                    continue
+                elif abs(diff) < chord_tolerance and (
+                    current_pitch >= melody_degree_tolerance_pitch
+                ):
+                    melody_indexes.append(note_index)
+                    note_index += 1
+                    continue
+            else:
+                if (diff < chord_tolerance) and all(
+                    note_pitches[i] - current_pitch < chord_tolerance
+                    for i in melody_indexes[-2:]
+                ):
+                    melody_indexes.append(note_index)
+                    note_index += 1
+                    continue
+                elif (
+                    (abs(diff) < chord_tolerance)
+                    and (current_pitch >= melody_degree_tolerance_pitch)
+                    and all(
+                        note_pitches[i] - current_pitch < chord_tolerance
+                        for i in melody_indexes[-2:]
+                    )
+                ):
+                    melody_indexes.append(note_index)
+                    note_index += 1
+                    continue
+
+        else:
+            # consider as a new beginning of a melody, clear the recent_notes_pitches
+            # decide according to the pitch difference between the current note and the next note
+            if diff >= chord_tolerance:
+                melody_indexes.append(note_index + 1)
+                note_index += 2
+                continue
+            else:
+                melody_indexes.append(note_index)
+                note_index += 1
+                continue
+        last_is_melody = False
+        note_index += 1
+
+    if note_index < len(notes):
+        # check last note
+        recent_notes_pitches = []
+        for index in range(len(melody_indexes) - 1, -1, -1):
+            if note_begin_times[-1] - note_begin_times[melody_indexes[index]] < 8:
+                recent_notes_pitches.append(note_pitches[melody_indexes[index]])
+            else:
+                break
+
+        if recent_notes_pitches:
+            average_recent_pitch = sum(recent_notes_pitches) / len(recent_notes_pitches)
+            avergae_diff = average_recent_pitch - current_pitch
+            if avergae_diff <= melody_tolerance:
+                if note_pitches[melody_indexes[-1]] - current_pitch < chord_tolerance:
+                    melody_indexes.append(note_index)
+                    note_index += 1
+
+    # filter out the melody notes and chord notes
+    melody_pitches: list[tuple[list[int], Literal["Note", "Chord", "Arpeggio"]]] = []
+    chord_pitches: list[tuple[list[int], Literal["Note", "Chord", "Arpeggio"]]] = []
+
+    melody_begin_times: list[Fraction] = []
+    chord_begin_times: list[Fraction] = []
+
+    for index, note in enumerate(notes):
+        if index in melody_indexes:
+            if isinstance(note, music21.note.Note):
+                melody_pitches.append(([get_pitch_num(note)], "Note"))
+            elif isinstance(note, music21.chord.Chord):
+                is_arpeggio = any(
+                    isinstance(n, music21.expressions.ArpeggioMark)
+                    for n in note.expressions
+                )
+                # select all pitches that are in chord distance
+
+                # if some durations are tuplet, do not split melody and chord, consider all pitches as melody.
+                # however it is acceptable when the chord's begin time is integer.
+                if (
+                    is_tuplet_duration(
+                        Fraction(note.duration.quarterLength).limit_denominator(64)
+                    )
+                    and not note_begin_times[index].denominator == 1
+                ):
+                    melody_pitches.append(
+                        ([get_pitch_num(n) for n in note.notes], "Chord")
+                    )
+                    melody_begin_times.append(note_begin_times[index])
+                    continue
+
+                in_chords, out_chords = melody_chord_split(
+                    [get_pitch_num(n) for n in note.notes]
+                )
+
+                # let in_chords to be in the melody.
+                if in_chords:
+                    if len(in_chords) == 1:
+                        melody_pitches.append((in_chords, "Note"))
+                    else:
+                        if is_arpeggio:
+                            melody_pitches.append((in_chords, "Arpeggio"))
+                        else:
+                            melody_pitches.append((in_chords, "Chord"))
+                if out_chords:
+                    if len(out_chords) == 1:
+                        chord_pitches.append((out_chords, "Note"))
+                    else:
+                        if is_arpeggio:
+                            chord_pitches.append((out_chords, "Arpeggio"))
+                        else:
+                            chord_pitches.append((out_chords, "Chord"))
+
+                    chord_begin_times.append(note_begin_times[index])
+
+            melody_begin_times.append(note_begin_times[index])
+        else:
+            if isinstance(note, music21.note.Note):
+                chord_pitches.append(([get_pitch_num(note)], "Note"))
+            else:
+                if any(
+                    isinstance(n, music21.expressions.ArpeggioMark)
+                    for n in note.expressions
+                ):
+                    chord_pitches.append(
+                        ([get_pitch_num(n) for n in note.notes], "Arpeggio")
+                    )
+                else:
+                    chord_pitches.append(
+                        ([get_pitch_num(n) for n in note.notes], "Chord")
+                    )
+            chord_begin_times.append(note_begin_times[index])
+
+    melody_part = build_part_from_pitches_and_begin_times(
+        melody_pitches,
+        melody_begin_times,
+        full_time=Fraction(full_time).limit_denominator(64),
+    )
+    chord_part = build_part_from_pitches_and_begin_times(
+        chord_pitches,
+        chord_begin_times,
+        full_time=Fraction(full_time).limit_denominator(64),
+    )
+
+    # recover tempo markings
+    for tempo_time, tempo in tempo_indexs:
+        tempo_mark = music21.tempo.MetronomeMark(number=tempo)
+        melody_part.insert(tempo_time, tempo_mark)
+
+    result_stream.insert(0, melody_part)
+    result_stream.insert(0, chord_part)
+
+    return result_stream

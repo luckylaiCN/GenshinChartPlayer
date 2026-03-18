@@ -40,5 +40,6 @@ class BottomWarningFrame(ctk.CTkFrame):
 
 
 def raise_bottom_warning(master, text: str) -> None:
+    print(f"Warning: {text}")
     warning_frame = BottomWarningFrame(master=get_root_widget(master), text=text)
     warning_frame.pack(side="bottom", fill="x")
