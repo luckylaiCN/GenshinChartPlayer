@@ -157,7 +157,7 @@ def build_part_from_pitches_and_begin_times(
             rest = music21.note.Rest()
             rest.duration.quarterLength = float(min(full_time - added_time, 4))
             added_time += min(full_time - added_time, 4)
-        part.append(rest)
+            part.append(rest)
         return part
 
     # add duration before the first note if the first note does not start at the beginning of the beat
@@ -169,7 +169,7 @@ def build_part_from_pitches_and_begin_times(
             added_time += min(begin_times[0] - added_time, 4)
             part.append(rest)
 
-    fix_duartion = 4
+    fix_duration = 4
     # default duration is 4 beats, which is the whole beat, will be fixed later according to begin times between notes
     index = 0
     while index < len(pitches) - 1:
@@ -177,7 +177,7 @@ def build_part_from_pitches_and_begin_times(
         current_time = begin_times[index]
         next_time = begin_times[index + 1]
         est_duration = next_time - current_time
-        duration = min(est_duration, fix_duartion)
+        duration = min(est_duration, fix_duration)
         # end_time = current_time + duration
         # # remove decimal part of end_time
         # end_time_rounded = int(end_time)
@@ -234,7 +234,7 @@ def build_part_from_pitches_and_begin_times(
     last_pitches, last_type = pitches[-1]
     last_time = begin_times[-1]
     est_duration = full_time - last_time
-    duration = min(est_duration, fix_duartion)
+    duration = min(est_duration, fix_duration)
     is_duartion_covered = est_duration == duration
     if last_type == "Note":
         music21_note = music21.note.Note(last_pitches[0])
@@ -272,7 +272,7 @@ def build_part_from_pitches_and_begin_times(
         part.append(music21_chord)
     if not is_duartion_covered:
         added_time = 0
-        while added_time < full_time - last_time - fix_duartion:
+        while added_time < full_time - last_time - fix_duration:
             rest = music21.note.Rest()
             rest.duration.quarterLength = float(
                 min(est_duration - duration - added_time, 4)
@@ -471,8 +471,10 @@ def divide_into_melody_and_chords(
     melody_begin_times: list[Fraction] = []
     chord_begin_times: list[Fraction] = []
 
+    melody_index_set = set(melody_indexes)
+
     for index, note in enumerate(notes):
-        if index in melody_indexes:
+        if index in melody_index_set:
             if isinstance(note, music21.note.Note):
                 melody_pitches.append(([get_pitch_num(note)], "Note"))
             elif isinstance(note, music21.chord.Chord):
