@@ -31,6 +31,10 @@ audio.zip
 # vs code settings
 .vscode/
 
+# vs code log
+debug.log
+
 # music files
 *.mid
 *.xml
+*.mxl

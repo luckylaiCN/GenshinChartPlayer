@@ -99,6 +99,14 @@ class MainFrame(ctk.CTkFrame):
 
         self.file_menu.add_separator()
 
+        self.convert_from_score_item = Menu(
+            master=self.file_menu,
+            menu_name="Convert from MusicXML/MIDI",
+            command=self.handle_convert_from_musicxml,
+        )
+
+        self.file_menu.add_separator()
+
         self.quit_menu_item = Menu(
             master=self.file_menu,
             menu_name="Quit",
@@ -378,8 +386,8 @@ class MainFrame(ctk.CTkFrame):
 
         stream = self.editor_frame.get_current_chart_musicxml_stream()
         if stream is not None:
-            filename = f"{self.editor_frame.get_title()}.xml"
-            filepath = ask_save_file_dialog(["*.xml"], default_filename=filename)
+            filename = f"{self.editor_frame.get_title()}.mxl"
+            filepath = ask_save_file_dialog(["*.mxl"], default_filename=filename)
             if filepath is not None:
                 try:
                     stream.write("musicxml", fp=filepath)
@@ -429,6 +437,18 @@ class MainFrame(ctk.CTkFrame):
                 master=self,
                 text="Failed to export MIDI: No valid chart data found.",
             )
+
+    def handle_convert_from_musicxml(self) -> None:
+        file_path = ask_open_file_dialog(["*.xml", "*.mxl", "*.musicxml", "*.mid"])
+        if file_path is not None:
+            resp = self.editor_frame.load_from_score(file_path)
+            if not resp:
+                raise_toast(
+                    master=self,
+                    message="Failed to convert from MusicXML/MIDI. Please make sure the file is valid and try again.",
+                    duration=3000,
+                    position="center",
+                )
 
     def handle_reopen_asministrator(self) -> None:
         if should_request_admin_privileges():

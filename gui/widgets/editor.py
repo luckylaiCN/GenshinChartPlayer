@@ -1,4 +1,6 @@
 import os
+
+import music21
 import customtkinter as ctk
 
 from typing import Callable, TypedDict
@@ -8,6 +10,7 @@ from player.pattern import PatternMismatchException
 from player.runtime import ChartRuntime
 from player.interal import InternalProperty
 from player.command import CommandParseException
+from player.musicxml import convert_musicxml_stream_to_chart_str
 from chart.parser import ChartParseException, parse_chart, BeatLine
 from gui.file_handler import FileTab
 from gui.theme import curr_theme
@@ -485,6 +488,14 @@ class MultipleFileTabFrame(ctk.CTkTabview):
             if curr_text == file_tab.editing_content:
                 unmodified_tabs.append(file_tab)
         return unmodified_tabs
+
+    def new_file_text(self, text: str, tab_name: str | None = None) -> None:
+        tab_name = "Untitled" if tab_name is None else tab_name
+        new_tab = FileTab.new_tab()
+        new_tab.default_name = tab_name
+        new_tab.editing_content = text
+        new_tab.is_modified = True
+        self.add_file_tab(new_tab)
 
 
 class EditorFrame(ctk.CTkFrame):
@@ -969,3 +980,14 @@ class EditorFrame(ctk.CTkFrame):
                 i * interval,
                 lambda p=path, m=is_modified: self.handle_open_file(p, m),
             )
+
+    def load_from_score(self, filepath: str) -> bool:
+        basename = os.path.basename(filepath)
+        name, ext = os.path.splitext(basename)
+        try:
+            score = music21.converter.parse(filepath)
+            chart_str = convert_musicxml_stream_to_chart_str(score)
+            self.text_areas.new_file_text(chart_str, tab_name=name)
+            return True
+        except Exception:
+            return False
