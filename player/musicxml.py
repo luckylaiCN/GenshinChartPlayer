@@ -1,3 +1,5 @@
+import math
+
 import music21
 
 from fractions import Fraction
@@ -12,6 +14,7 @@ from chart.note import (
     ChordNote,
     ArpeggioNote,
 )
+from chart.builder import build_beat
 
 
 class DurationNoteContainer:
@@ -141,6 +144,13 @@ def get_pitch_num(note: music21.note.Note) -> int:
     return note.pitch.midi
 
 
+def is_chord_arpeggio(chord: music21.chord.Chord) -> bool:
+    """Check if a music21 chord has an arpeggio mark."""
+    return any(
+        isinstance(n, music21.expressions.ArpeggioMark) for n in chord.expressions
+    )
+
+
 def build_part_from_pitches_and_begin_times(
     pitches: list[tuple[list[int], Literal["Note", "Chord", "Arpeggio"]]],
     begin_times: list[Fraction],
@@ -169,19 +179,20 @@ def build_part_from_pitches_and_begin_times(
             added_time += min(begin_times[0] - added_time, 4)
             part.append(rest)
 
-    fix_duration = 4
     # default duration is 4 beats, which is the whole beat, will be fixed later according to begin times between notes
     index = 0
-    while index < len(pitches) - 1:
+    while index < len(pitches):
         current_pitches, current_type = pitches[index]
         current_time = begin_times[index]
-        next_time = begin_times[index + 1]
+        next_time = begin_times[index + 1] if index < len(pitches) - 1 else full_time
+        fix_duration = 4
+        # if it is not a /1 /2 /4 /8 ... /64 begin time, the est duration should be the nearest measure end
+        if is_tuplet_time(current_time):
+            est_next_time = current_time // 4 * 4 + 4
+            est_next_time = min(est_next_time, full_time)
+            fix_duration = est_next_time - current_time
         est_duration = next_time - current_time
         duration = min(est_duration, fix_duration)
-        # end_time = current_time + duration
-        # # remove decimal part of end_time
-        # end_time_rounded = int(end_time)
-        # duration = end_time_rounded - current_time
         is_duartion_covered = est_duration == duration
         if current_type == "Note":
             music21_note = music21.note.Note(current_pitches[0])
@@ -230,56 +241,6 @@ def build_part_from_pitches_and_begin_times(
 
         index += 1
 
-    # handle last note
-    last_pitches, last_type = pitches[-1]
-    last_time = begin_times[-1]
-    est_duration = full_time - last_time
-    duration = min(est_duration, fix_duration)
-    is_duartion_covered = est_duration == duration
-    if last_type == "Note":
-        music21_note = music21.note.Note(last_pitches[0])
-        music21_note.duration.quarterLength = duration
-        # remove accidental if the pitch is natural
-        if (
-            music21_note.pitch.accidental is not None
-            and music21_note.pitch.accidental.name == "natural"
-        ):
-            music21_note.pitch.accidental = None
-        part.append(music21_note)
-    elif last_type == "Chord":
-        music21_chord = music21.chord.Chord(last_pitches)
-        music21_chord.duration.quarterLength = duration
-        # remove accidental if the pitch is natural
-        for note in music21_chord.notes:
-            if (
-                note.pitch.accidental is not None
-                and note.pitch.accidental.name == "natural"
-            ):
-                note.pitch.accidental = None
-        part.append(music21_chord)
-    elif last_type == "Arpeggio":
-        music21_chord = music21.chord.Chord(last_pitches)
-        music21_chord.duration.quarterLength = duration
-        arpeggio_mark = music21.expressions.ArpeggioMark("normal")
-        # remove accidental if the pitch is natural
-        for note in music21_chord.notes:
-            if (
-                note.pitch.accidental is not None
-                and note.pitch.accidental.name == "natural"
-            ):
-                note.pitch.accidental = None
-        music21_chord.expressions.append(arpeggio_mark)
-        part.append(music21_chord)
-    if not is_duartion_covered:
-        added_time = 0
-        while added_time < full_time - last_time - fix_duration:
-            rest = music21.note.Rest()
-            rest.duration.quarterLength = float(
-                min(est_duration - duration - added_time, 4)
-            )
-            added_time += min(est_duration - duration - added_time, 4)
-            part.append(rest)
-
     return part
 
 
@@ -305,7 +266,7 @@ def melody_chord_split(pitches: list[int]) -> tuple[list[int], list[int]]:
     return melodies, chords
 
 
-def is_tuplet_duration(duration: Fraction) -> bool:
+def is_tuplet_time(duration: Fraction) -> bool:
     """Check if the given duration is a tuplet duration."""
     standard_denominators = [1, 2, 4, 8, 16, 32, 64]
     return duration.denominator not in standard_denominators
@@ -377,7 +338,7 @@ def divide_into_melody_and_chords(
 
         duration = notes[note_index].duration.quarterLength
         fraction_division = Fraction(duration).limit_denominator(64)
-        if is_tuplet_duration(fraction_division):
+        if is_tuplet_time(fraction_division):
             # if the duration is not a standard duration, consider it as a tuplet note,
             # keep the same melody/chord status as the last note, and skip the duration check for this note.
             if last_is_melody:
@@ -478,19 +439,15 @@ def divide_into_melody_and_chords(
             if isinstance(note, music21.note.Note):
                 melody_pitches.append(([get_pitch_num(note)], "Note"))
             elif isinstance(note, music21.chord.Chord):
-                is_arpeggio = any(
-                    isinstance(n, music21.expressions.ArpeggioMark)
-                    for n in note.expressions
-                )
+                is_arpeggio = is_chord_arpeggio(note)
                 # select all pitches that are in chord distance
 
                 # if some durations are tuplet, do not split melody and chord, consider all pitches as melody.
-                # however it is acceptable when the chord's begin time is integer.
-                if (
-                    is_tuplet_duration(
-                        Fraction(note.duration.quarterLength).limit_denominator(64)
-                    )
-                    and not note_begin_times[index].denominator == 1
+                # however it is acceptable for the first note of a tuplet.
+                if is_tuplet_time(
+                    Fraction(note.duration.quarterLength).limit_denominator(64)
+                ) and is_tuplet_time(
+                    Fraction(note.offset - int(note.offset)).limit_denominator(64)
                 ):
                     melody_pitches.append(
                         ([get_pitch_num(n) for n in note.notes], "Chord")
@@ -527,10 +484,7 @@ def divide_into_melody_and_chords(
             if isinstance(note, music21.note.Note):
                 chord_pitches.append(([get_pitch_num(note)], "Note"))
             else:
-                if any(
-                    isinstance(n, music21.expressions.ArpeggioMark)
-                    for n in note.expressions
-                ):
+                if is_chord_arpeggio(note):
                     chord_pitches.append(
                         ([get_pitch_num(n) for n in note.notes], "Arpeggio")
                     )
@@ -560,3 +514,152 @@ def divide_into_melody_and_chords(
     result_stream.insert(0, chord_part)
 
     return result_stream
+
+
+def convert_musicxml_stream_to_pitches_and_begin_times(
+    stream: music21.stream.Stream,
+) -> tuple[
+    list[tuple[list[int], Literal["Note", "Chord", "Arpeggio"]]],
+    list[Fraction],
+    list[tuple[int, float]],
+]:
+    """Convert a music21 stream to a list of pitches and begin times."""
+    pitches: list[tuple[list[int], Literal["Note", "Chord", "Arpeggio"]]] = []
+    begin_times: list[Fraction] = []
+    tempo_indexes: list[tuple[int, float]] = []
+
+    flattened_stream = stream.flatten().recurse()
+    for element in flattened_stream:
+        # tempo markings
+        if isinstance(element, music21.tempo.MetronomeMark):
+            tempo_indexes.append((int(element.offset), element.number))
+            continue
+
+        if isinstance(element, (music21.note.Note, music21.chord.Chord)):
+            if element.tie is not None and element.tie.type in ("stop", "continue"):
+                # if the note is tied from the previous note, skip it, as it will be handled in the next step when processing the previous note.
+                continue
+            curr_time = Fraction(element.offset).limit_denominator(64)
+            if len(begin_times):
+                pre_time = begin_times[-1]
+                if curr_time < pre_time:
+                    # this should not happen, but just in case, if the current time is smaller than the previous time, consider it as a continuation of the previous note, and do not add it to the pitches and begin_times.
+                    continue
+                if curr_time == pre_time:
+                    # merge the current note with the previous note, consider them as a chord if they are not already a chord.
+                    # if any of the two notes is an arpeggio, consider the merged note as an arpeggio.
+                    pre_pitches, pre_type = pitches[-1]
+                    if isinstance(element, music21.note.Note):
+                        curr_pitches = [get_pitch_num(element)]
+                        curr_type = "Note"
+                    else:
+                        curr_pitches = [get_pitch_num(n) for n in element.notes]
+                        if is_chord_arpeggio(element):
+                            curr_type = "Arpeggio"
+                        else:
+                            curr_type = "Chord"
+                    merged_pitches = list(set(pre_pitches) | set(curr_pitches))
+                    if pre_type == "Arpeggio" or curr_type == "Arpeggio":
+                        merged_type = "Arpeggio"
+                    elif pre_type == "Chord" or curr_type == "Chord":
+                        merged_type = "Chord"
+                    elif len(merged_pitches) > 1:
+                        merged_type = "Chord"
+                    else:
+                        merged_type = "Note"  # should not happen.
+                    pitches[-1] = (merged_pitches, merged_type)
+                    continue
+
+            if isinstance(element, music21.note.Note):
+                pitches.append(([get_pitch_num(element)], "Note"))
+            else:
+                if is_chord_arpeggio(element):
+                    pitches.append(
+                        ([get_pitch_num(n) for n in element.notes], "Arpeggio")
+                    )
+                else:
+                    pitches.append(([get_pitch_num(n) for n in element.notes], "Chord"))
+            begin_times.append(curr_time)
+
+    return pitches, begin_times, tempo_indexes
+
+
+def convert_musicxml_stream_to_chart_str(stream: music21.stream.Stream) -> str:
+    """Convert a music21 stream to a chart string."""
+
+    full_time = stream.highestTime
+    max_beat_num = math.ceil(full_time)
+    pitches, begin_times, tempo_indexes = (
+        convert_musicxml_stream_to_pitches_and_begin_times(stream)
+    )
+    if len(pitches) == 0:
+        return ""
+    if len(pitches) != len(begin_times):
+        raise ValueError("Length of pitches and begin_times must be the same.")
+    if not tempo_indexes:
+        tempo_indexes = [(0, 120.0)]  # default tempo is 120 BPM
+    if tempo_indexes[0][0] != 0:
+        tempo_indexes.insert(
+            0, (0, 120.0)
+        )  # add default tempo at the beginning if not exist
+
+    beat_str: list[str] = ["    "] * max_beat_num
+    beat_pitches_batch: list[
+        tuple[list[int], Literal["Note", "Chord", "Arpeggio"]]
+    ] = []
+    beat_begin_times_batch: list[Fraction] = []
+    working_beat_index = 0
+    for pitch, begin_time in zip(pitches, begin_times):
+        beat_num = int(begin_time)
+        if working_beat_index == beat_num:
+            beat_pitches_batch.append(pitch)
+            beat_begin_times_batch.append(begin_time - beat_num)
+        else:
+            beat_str[working_beat_index] = build_beat(
+                beat_pitches_batch, beat_begin_times_batch
+            )
+            working_beat_index = beat_num
+            beat_pitches_batch = [pitch]
+            beat_begin_times_batch = [begin_time - beat_num]
+        working_beat_index = beat_num
+    if beat_pitches_batch:
+        beat_str[working_beat_index] = build_beat(
+            beat_pitches_batch, beat_begin_times_batch
+        )
+
+    # each line 4 beats
+    # every 4 lines a section, add empty line
+    beat_counter = 0
+    line_counter = 0
+    line_container: list[str] = []
+    chart_lines: list[str] = []
+    for beat_index in range(max_beat_num):
+        # check if there is a tempo change at the current beat, if so, add a tempo marking line before the current beat line
+        if tempo_indexes and tempo_indexes[0][0] == beat_index:
+            tempo = tempo_indexes[0][1]
+
+            tempo_indexes.pop(0)
+            beat_counter = 0
+            line_counter = 0
+            if line_container:
+                chart_lines.append("/".join(line_container) + "/\n")
+                line_container = []
+            if len(chart_lines) > 0:
+                chart_lines.append("\n")
+            chart_lines.append(f"@set bpm {tempo}\n")
+
+        line_container.append(beat_str[beat_index])
+        beat_counter += 1
+        if beat_counter == 4:
+            chart_lines.append("/".join(line_container) + "/\n")
+            line_container = []
+            beat_counter = 0
+            line_counter += 1
+            if line_counter == 4:
+                chart_lines.append("\n")
+                line_counter = 0
+
+    if line_container:
+        chart_lines.append("/".join(line_container) + "/\n")
+
+    return "".join(chart_lines)

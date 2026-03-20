@@ -37,6 +37,7 @@ class FileTab:
     is_modified: bool
     editing_content: str
     internal_id: str
+    default_name: str = "Untitled"
 
     def __init__(self, source_path: str | None) -> None:
         self.source_path = source_path
@@ -62,7 +63,7 @@ class FileTab:
             self.is_modified = True
 
     def save(self, path: str | None = None) -> None:
-        self.is_modified = True # always consider modified after save call
+        self.is_modified = True  # always consider modified after save call
         if path is not None:
             self._save_to_file(path)
             self.source_path = path
@@ -86,7 +87,7 @@ class FileTab:
             filename_only, _ = os.path.splitext(basename)
             return filename_only
         else:
-            return "Untitled"
+            return self.default_name
 
     @property
     def tab_identifier(self) -> str:

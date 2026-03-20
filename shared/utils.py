@@ -150,3 +150,27 @@ SYSTEM_USER_UNIQUE_ID = get_system_unique_id()
 def is_fake_space(char: str):
     ACCEPTABLE_SPACES = ["\n", "\r", " "]
     return char.isspace() and char not in ACCEPTABLE_SPACES
+
+
+def gcd(a: int, b: int) -> int:
+    """Calculate the greatest common divisor of two integers."""
+    while b:
+        a, b = b, a % b
+    return abs(a)
+
+
+def lcm(a: int, b: int) -> int:
+    """Calculate the least common multiple of two integers."""
+    if a == 0 or b == 0:
+        return 0
+    return abs(a * b) // gcd(a, b)
+
+
+def lcm_n(numbers: list[int]) -> int:
+    """Calculate the least common multiple of a list of integers."""
+    if not numbers:
+        return 1
+    lcm_value = numbers[0]
+    for num in numbers[1:]:
+        lcm_value = lcm(lcm_value, num)
+    return lcm_value

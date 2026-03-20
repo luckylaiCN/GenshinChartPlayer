@@ -5,6 +5,7 @@ from chart.constants import (
     ChartNotation,
     NOTATION_INDEX_TABLE,
     KEYBOARD_INDEX_TABLE,
+    PITCH_NUM_TABLE,
     ChartKey,
     BracketTokenLeft,
     BracketTokenRight,
@@ -52,6 +53,22 @@ def token_to_index(token: ChartNotation) -> int:
     if token in NOTATION_INDEX_TABLE:
         return NOTATION_INDEX_TABLE.index(token)
     return -1
+
+
+def pitch_to_token(pitch: int) -> ChartNotation | None:
+    """Convert a MIDI pitch number to its corresponding chart token."""
+    if pitch in PITCH_NUM_TABLE:
+        index = PITCH_NUM_TABLE.index(pitch)
+        return NOTATION_INDEX_TABLE[index]
+    return None
+
+
+def pitch_to_keyboard(pitch: int) -> ChartKey | None:
+    """Convert a MIDI pitch number to its corresponding keyboard key."""
+    token = pitch_to_token(pitch)
+    if token is not None:
+        return token_to_keyboard(token)
+    return None
 
 
 def is_bracket_token(token: str) -> bool:
