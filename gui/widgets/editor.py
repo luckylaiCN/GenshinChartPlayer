@@ -656,6 +656,8 @@ class EditorFrame(ctk.CTkFrame):
             )
             file_name, _ = os.path.splitext(name_ext)
             return file_name
+        if tab.default_name is not None:
+            return tab.default_name
         return "Untitled"
 
     def format_chart(self) -> None:
