@@ -526,13 +526,13 @@ def convert_musicxml_stream_to_pitches_and_begin_times(
     """Convert a music21 stream to a list of pitches and begin times."""
     pitches: list[tuple[list[int], Literal["Note", "Chord", "Arpeggio"]]] = []
     begin_times: list[Fraction] = []
-    tempo_indexs: list[tuple[int, float]] = []
+    tempo_indexes: list[tuple[int, float]] = []
 
     flattened_stream = stream.flatten().recurse()
     for element in flattened_stream:
         # tempo markings
         if isinstance(element, music21.tempo.MetronomeMark):
-            tempo_indexs.append((int(element.offset), element.number))
+            tempo_indexes.append((int(element.offset), element.number))
             continue
 
         if isinstance(element, (music21.note.Note, music21.chord.Chord)):
@@ -581,7 +581,7 @@ def convert_musicxml_stream_to_pitches_and_begin_times(
                     pitches.append(([get_pitch_num(n) for n in element.notes], "Chord"))
             begin_times.append(curr_time)
 
-    return pitches, begin_times, tempo_indexs
+    return pitches, begin_times, tempo_indexes
 
 
 def convert_musicxml_stream_to_chart_str(stream: music21.stream.Stream) -> str:

@@ -34,7 +34,8 @@ def get_string_name(
             if keyboard_key is None:
                 if error == "raise":
                     raise ValueError(f"Invalid pitch number: {pitch}")
-            keyboard_keys.append(keyboard_key)
+            else:
+                keyboard_keys.append(keyboard_key)
         if len(keyboard_keys) == 0:
             return space * length
         if pitch_type == "Chord":
@@ -127,8 +128,8 @@ def build_beat(
 
     # check if all durations are tuplet.
     all_tuplet = False
-    tuplet_duartion_sum = sum(end - begin for begin, end in tuplet_scopes)
-    if tuplet_duartion_sum == Fraction(1):
+    total_tuplet_duration = sum(end - begin for begin, end in tuplet_scopes)
+    if total_tuplet_duration == Fraction(1):
         all_tuplet = True
         min_duration = min(min_duration, 1)
     else:
@@ -189,7 +190,6 @@ def build_beat(
             relative_length = int(tuplet_duration / min_duration)
             part_string += "_" * (relative_length - 1)
             part_strings.append(part_string)
-            part_durations.append(duration)
             tuplet_index += 1
             index += 1  # move to the next note after the tuplet section
         else:
