@@ -97,6 +97,12 @@ class MainFrame(ctk.CTkFrame):
             command=self.handle_editor_export_midi,
         )
 
+        self.export_numeral_menu_item = Menu(
+            master=self.file_menu,
+            menu_name="Export Numeral Notation",
+            command=self.handle_export_numeral_notation,
+        )
+
         self.file_menu.add_separator()
 
         self.convert_from_score_item = Menu(
@@ -450,6 +456,26 @@ class MainFrame(ctk.CTkFrame):
                     position="center",
                 )
 
+    def handle_export_numeral_notation(self) -> None:
+        filename = f"{self.editor_frame.get_title()}_numeral.txt"
+        filepath = ask_save_file_dialog(["*.txt"], default_filename=filename)
+        if filepath is not None:
+            status = self.editor_frame.export_numeral_notation(filepath)
+            if not status:
+                raise_toast(
+                    master=self,
+                    message="Failed to export numeral notation.",
+                    duration=3000,
+                    position="center",
+                )
+            else:
+                raise_toast(
+                    master=self,
+                    message="Numeral notation exported successfully.",
+                    duration=2000,
+                    position="center",
+                )
+                show_file_in_explorer(filepath)
     def handle_reopen_asministrator(self) -> None:
         if should_request_admin_privileges():
             ask_for_admin_privileges()

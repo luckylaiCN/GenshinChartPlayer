@@ -6,6 +6,7 @@ from chart.constants import (
     NOTATION_INDEX_TABLE,
     KEYBOARD_INDEX_TABLE,
     PITCH_NUM_TABLE,
+    NUMERAL_NOTATION_TABLE,
     ChartKey,
     BracketTokenLeft,
     BracketTokenRight,
@@ -120,3 +121,11 @@ def is_bracket_match(left: BracketTokenLeft, right: BracketTokenRight) -> bool:
 def is_command_line(line: str) -> bool:
     """Check if the given line is a command line (starts with an @)."""
     return line.startswith("@")
+
+def keyboard_chart_to_numeral(chart_string: str) -> str:
+    """Convert a chart string with keyboard notation to numeral notation."""
+    
+    result = chart_string
+    for kb, num in zip(KEYBOARD_INDEX_TABLE, NUMERAL_NOTATION_TABLE):
+        result = result.replace(kb, num)
+    return result

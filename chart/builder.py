@@ -38,6 +38,8 @@ def get_string_name(
                 keyboard_keys.append(keyboard_key)
         if len(keyboard_keys) == 0:
             return space * length
+        if len(keyboard_keys) == 1:
+            return keyboard_keys[0] + append_space
         if pitch_type == "Chord":
             return "(" + "".join(keyboard_keys) + ")" + append_space
         elif pitch_type == "Arpeggio":

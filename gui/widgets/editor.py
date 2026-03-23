@@ -12,6 +12,7 @@ from player.interal import InternalProperty
 from player.command import CommandParseException
 from player.musicxml import convert_musicxml_stream_to_chart_str
 from chart.parser import ChartParseException, parse_chart, BeatLine
+from chart.utils import keyboard_chart_to_numeral
 from gui.file_handler import FileTab
 from gui.theme import curr_theme
 from gui.widgets.toast import raise_toast
@@ -990,6 +991,18 @@ class EditorFrame(ctk.CTkFrame):
             score = music21.converter.parse(filepath)
             chart_str = convert_musicxml_stream_to_chart_str(score)
             self.text_areas.new_file_text(chart_str, tab_name=name)
+            return True
+        except Exception:
+            return False
+
+    def export_numeral_notation(self, filepath: str) -> bool:
+        current_text = self.get_text()
+        if current_text.strip() == "":
+            return False
+        numeral_chart_str = keyboard_chart_to_numeral(current_text)
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(numeral_chart_str)
             return True
         except Exception:
             return False
