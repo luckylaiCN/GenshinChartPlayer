@@ -116,7 +116,24 @@ class CMD_Author(Command):
         self.internal_property.author = author_name
 
 
+class CMD_TimeSignature(Command):
+    _registered_name = "timesig"
+
+    def check_valid(self) -> bool:
+        if len(self.args) != 1:
+            return False
+        try:
+            numerator = int(self.args[0])
+            return numerator > 0
+        except ValueError:
+            return False
+
+    def execute(self) -> None:
+        numerator = int(self.args[0])
+        self.internal_property.time_signature = numerator
+
+
 default_command_registry = CommandRegistry()
-default_command_registry.register_commands([CMD_Set, CMD_Author])
+default_command_registry.register_commands([CMD_Set, CMD_Author, CMD_TimeSignature])
 
 command_registry = default_command_registry  # exported registry instance

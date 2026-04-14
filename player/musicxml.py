@@ -151,15 +151,27 @@ def is_chord_arpeggio(chord: music21.chord.Chord) -> bool:
     )
 
 
+def get_nearest_duration(duration: Fraction) -> Fraction:
+    """Get the nearest standard duration to the given duration."""
+    est_d = Fraction(4)
+    while est_d >= Fraction(1, 64):
+        if duration >= est_d:
+            return est_d
+        est_d /= 2
+    return Fraction(1, 64)
+
+
 def build_part_from_pitches_and_begin_times(
     pitches: list[tuple[list[int], Literal["Note", "Chord", "Arpeggio"]]],
     begin_times: list[Fraction],
     full_time: Fraction,
+    ts: music21.meter.TimeSignature, # pyright: ignore[reportPrivateImportUsage]
 ) -> music21.stream.Part:
     """Build a music21 part from a list of pitches and begin times.
     Fixes duration according to begin times between notes, and fills the rest with rests.
     """
     part = music21.stream.Part()
+    part.append(ts) 
 
     if len(pitches) == 0:
         added_time = 0
@@ -188,9 +200,20 @@ def build_part_from_pitches_and_begin_times(
         fix_duration = 4
         # if it is not a /1 /2 /4 /8 ... /64 begin time, the est duration should be the nearest measure end
         if is_tuplet_time(current_time):
-            est_next_time = current_time // 4 * 4 + 4
+            est_next_time = current_time // full_time * full_time + full_time
             est_next_time = min(est_next_time, full_time)
             fix_duration = est_next_time - current_time
+        # if its begin time is not an integer, the est duration should be the nearest integer beat
+        if current_time.denominator != 1:
+            est_next_time = math.ceil(float(current_time))
+            est_next_time = min(Fraction(est_next_time), full_time)
+            fix_duration = min(fix_duration, est_next_time - current_time)
+        else:
+            # if it is a integer begin time, the est duration should also be an integer
+            if next_time - current_time > 1:
+                fix_duration = min(
+                    fix_duration, math.floor(float(next_time)) - current_time
+                )
         est_duration = next_time - current_time
         duration = min(est_duration, fix_duration)
         is_duartion_covered = est_duration == duration
@@ -233,10 +256,11 @@ def build_part_from_pitches_and_begin_times(
             added_time = 0
             while added_time < est_duration - duration:
                 rest = music21.note.Rest()
-                rest.duration.quarterLength = float(
-                    min(est_duration - duration - added_time, 4)
-                )
-                added_time += min(est_duration - duration - added_time, 4)
+                rest_duration = min(est_duration - duration - added_time, Fraction(4))
+                rest_duration = get_nearest_duration(rest_duration)
+
+                rest.duration.quarterLength = float(rest_duration)
+                added_time += rest_duration
                 part.append(rest)
 
         index += 1
@@ -274,6 +298,7 @@ def is_tuplet_time(duration: Fraction) -> bool:
 
 def divide_into_melody_and_chords(
     stream: music21.stream.Stream,
+    time_signature: int = 4,
 ) -> music21.stream.Stream:
     """Divide a music21 stream into a melody stream and a chord stream."""
     result_stream = music21.stream.Stream()
@@ -494,15 +519,19 @@ def divide_into_melody_and_chords(
                     )
             chord_begin_times.append(note_begin_times[index])
 
+    ts_mark = music21.meter.TimeSignature(f"{time_signature}/4")  # pyright: ignore[reportPrivateImportUsage]
+
     melody_part = build_part_from_pitches_and_begin_times(
         melody_pitches,
         melody_begin_times,
         full_time=Fraction(full_time).limit_denominator(64),
+        ts=ts_mark,
     )
     chord_part = build_part_from_pitches_and_begin_times(
         chord_pitches,
         chord_begin_times,
         full_time=Fraction(full_time).limit_denominator(64),
+        ts=ts_mark,
     )
 
     # recover tempo markings
@@ -522,17 +551,24 @@ def convert_musicxml_stream_to_pitches_and_begin_times(
     list[tuple[list[int], Literal["Note", "Chord", "Arpeggio"]]],
     list[Fraction],
     list[tuple[int, float]],
+    int,
 ]:
     """Convert a music21 stream to a list of pitches and begin times."""
     pitches: list[tuple[list[int], Literal["Note", "Chord", "Arpeggio"]]] = []
     begin_times: list[Fraction] = []
     tempo_indexes: list[tuple[int, float]] = []
+    time_signature = 4  # default time signature, will be updated if there is a time signature mark in the stream
 
     flattened_stream = stream.flatten().recurse()
     for element in flattened_stream:
         # tempo markings
         if isinstance(element, music21.tempo.MetronomeMark):
             tempo_indexes.append((int(element.offset), element.number))
+            continue
+
+        # time signature markings
+        if isinstance(element, music21.meter.TimeSignature): # pyright: ignore[reportPrivateImportUsage]
+            time_signature = element.numerator
             continue
 
         if isinstance(element, (music21.note.Note, music21.chord.Chord)):
@@ -581,7 +617,7 @@ def convert_musicxml_stream_to_pitches_and_begin_times(
                     pitches.append(([get_pitch_num(n) for n in element.notes], "Chord"))
             begin_times.append(curr_time)
 
-    return pitches, begin_times, tempo_indexes
+    return pitches, begin_times, tempo_indexes, time_signature
 
 
 def convert_musicxml_stream_to_chart_str(stream: music21.stream.Stream) -> str:
@@ -589,7 +625,7 @@ def convert_musicxml_stream_to_chart_str(stream: music21.stream.Stream) -> str:
 
     full_time = stream.highestTime
     max_beat_num = math.ceil(full_time)
-    pitches, begin_times, tempo_indexes = (
+    pitches, begin_times, tempo_indexes, time_signature = (
         convert_musicxml_stream_to_pitches_and_begin_times(stream)
     )
     if len(pitches) == 0:
@@ -627,7 +663,7 @@ def convert_musicxml_stream_to_chart_str(stream: music21.stream.Stream) -> str:
             beat_pitches_batch, beat_begin_times_batch
         )
 
-    # each line 4 beats
+    # each line {time_signature} beats
     # every 4 lines a section, add empty line
     beat_counter = 0
     line_counter = 0
@@ -650,7 +686,7 @@ def convert_musicxml_stream_to_chart_str(stream: music21.stream.Stream) -> str:
 
         line_container.append(beat_str[beat_index])
         beat_counter += 1
-        if beat_counter == 4:
+        if beat_counter == time_signature:
             chart_lines.append("/".join(line_container) + "/\n")
             line_container = []
             beat_counter = 0
@@ -661,5 +697,7 @@ def convert_musicxml_stream_to_chart_str(stream: music21.stream.Stream) -> str:
 
     if line_container:
         chart_lines.append("/".join(line_container) + "/\n")
+
+    chart_lines.insert(0, f"@timesig {time_signature}\n")
 
     return "".join(chart_lines)

@@ -405,6 +405,8 @@ class MainFrame(ctk.CTkFrame):
                     )
                     show_file_in_explorer(filepath)
                 except Exception as e:
+                    import traceback
+                    traceback.print_exc()
                     raise_bottom_warning(
                         master=self,
                         text=f"Failed to export MusicXML: {str(e)}",

@@ -151,6 +151,8 @@ class ChartRuntime:
             return None
         stream = music21.stream.Stream()
 
+        
+
         if len(self.playlist) == 0:
             return stream
         curr_bpm = 0
@@ -179,7 +181,7 @@ class ChartRuntime:
                 )
                 stream.append(rest)
 
-        stream = divide_into_melody_and_chords(stream)
+        stream = divide_into_melody_and_chords(stream, self.internal_property.time_signature)
         meta = music21.metadata.Metadata()
         meta.title = file_name
         meta.composer = self.internal_property.author

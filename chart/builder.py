@@ -183,7 +183,13 @@ def build_beat(
                 get_string_name(p, t, length=scaled_n, space=" _")
                 for (p, t), scaled_n in zip(t_notes, scaled_numerators)
             ]
-            for i in range(int((tuplet_key_begin_time - pre_begin_time) / tuplet_duration * lcm_denominator)):
+            for i in range(
+                int(
+                    (tuplet_key_begin_time - pre_begin_time)
+                    / tuplet_duration
+                    * lcm_denominator
+                )
+            ):
                 note_strings.insert(0, "_")
             if all_tuplet:
                 part_string = "{ " + " ".join(note_strings) + " }"
@@ -201,7 +207,11 @@ def build_beat(
             index += 1
 
     result = "".join(part_strings)
-    if all(duration == min_duration for duration in part_durations) and len(tuplet_scopes) == 0:
+    if (
+        all(duration == min_duration for duration in part_durations)
+        and len(tuplet_scopes) == 0
+        and len(part_durations) == int(1 / min_duration)
+    ):
         result += " "
     start_t = begin_times[0]
     if start_t > 0:
