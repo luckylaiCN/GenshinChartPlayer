@@ -81,7 +81,7 @@ class FunctionArea(ctk.CTkFrame):
         if self.event_callback:
             self.event_callback(self.curr_tab)
 
-    def _set_appearance_mode(self, mode_string):
+    def _set_appearance_mode(self, mode_string: str) -> None:
         super()._set_appearance_mode(mode_string)
         for btn in self.buttons.values():
             btn.configure(
@@ -98,7 +98,7 @@ class MiddleSeparator(ctk.CTkFrame):
 
 
 class RightSeparator(ctk.CTkFrame):  # right separator, can be used for resizing
-    master: "SidebarFrame"
+    master: "SidebarFrame" # pyright: ignore[reportIncompatibleVariableOverride]
 
     def __init__(self, master=None, **kwargs):
         super().__init__(master, **kwargs)

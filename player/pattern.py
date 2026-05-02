@@ -175,29 +175,18 @@ def get_notes_pattern_in_beat(
     if (
         beat.notes[-1] == " "
     ):  # some chart editors add an extra space at the end to make editing easier
-        if internal_property.time_signature == 4:
-            if num_notes % 4 == 1 or num_notes == 3:
-                target_notes = beat.notes[:-1]
-                num_notes -= 1
-        # elif internal_property.time_signature == 3:
-        #     if num_notes % 3 == 1:
-        #         target_notes = beat.notes[:-1]
-        #         num_notes -= 1
 
-    if internal_property.time_signature == 4:
-        if num_notes not in (1, 2, 4, 8, 16):
-            raise PatternMismatchWarning(
-                f"Number of notes {num_notes} in beat does not match the expected pattern.",
-                beat.begin_str or "",
-                beat.end_str or "",
-            )
-    # elif internal_property.time_signature == 3:
-    #     if num_notes not in (1, 3, 6, 12):
-    #         raise PatternMismatchWarning(
-    #             f"Number of notes {num_notes} in beat does not match 3/4 time signature.",
-    #             beat.begin_str or "",
-    #             beat.end_str or "",
-    #         )
+        if num_notes % 4 == 1 or num_notes == 3:
+            target_notes = beat.notes[:-1]
+            num_notes -= 1
+
+
+    if num_notes not in (1, 2, 4, 8, 16):
+        raise PatternMismatchWarning(
+            f"Number of notes {num_notes} in beat does not match the expected pattern.",
+            beat.begin_str or "",
+            beat.end_str or "",
+        )
 
     minimum_time_unit = full_duration / num_notes
     note_containers: list[NoteContainerRelative] = []

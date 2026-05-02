@@ -189,8 +189,8 @@ class FileFunctionalFrame(FunctionalFrame):
             item_id = self.tree_view.parent(item_id)
         return os.path.join(*parts)
 
-    def _set_appearance_mode(self, mode: str) -> None:
-        super()._set_appearance_mode(mode)
+    def _set_appearance_mode(self, mode_string: str) -> None:
+        super()._set_appearance_mode(mode_string)
         if self.tree_view is not None:
             bg_color = self._apply_appearance_mode(curr_theme.BG_SECONDARY)
             text_color = self._apply_appearance_mode(curr_theme.TEXT_PRIMARY)

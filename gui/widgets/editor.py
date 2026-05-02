@@ -890,8 +890,8 @@ class EditorFrame(ctk.CTkFrame):
         self._curr_beat_index = index
         self.highlight_current_beat()
 
-    def _set_appearance_mode(self, mode: str) -> None:
-        super()._set_appearance_mode(mode)
+    def _set_appearance_mode(self, mode_string: str) -> None:
+        super()._set_appearance_mode(mode_string)
         self._apply_theme()
         self.text_areas._segmented_button.configure(
             text_color=curr_theme.TEXT_PRIMARY,

@@ -15,7 +15,7 @@ def handler(
 ) -> None:
     status = wait_until_or_cancel(note_container.play_time + begin_time, cancel_flag)
     if status:
-        # print(f"Playing sound for note: {note_container.note}")
+        # print(f"Playing note: {note_container.note} at time {note_container.play_time:.2f}")
         basename = note_container.note.token + ".mp3"
         audio_path = os.path.join(AUDIO_DIR, basename)
         with suppress(

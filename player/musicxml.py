@@ -165,13 +165,13 @@ def build_part_from_pitches_and_begin_times(
     pitches: list[tuple[list[int], Literal["Note", "Chord", "Arpeggio"]]],
     begin_times: list[Fraction],
     full_time: Fraction,
-    ts: music21.meter.TimeSignature, # pyright: ignore[reportPrivateImportUsage]
+    ts: music21.meter.TimeSignature,  # pyright: ignore[reportPrivateImportUsage]
 ) -> music21.stream.Part:
     """Build a music21 part from a list of pitches and begin times.
     Fixes duration according to begin times between notes, and fills the rest with rests.
     """
     part = music21.stream.Part()
-    part.append(ts) 
+    part.append(ts)
 
     if len(pitches) == 0:
         added_time = 0
@@ -567,7 +567,7 @@ def convert_musicxml_stream_to_pitches_and_begin_times(
             continue
 
         # time signature markings
-        if isinstance(element, music21.meter.TimeSignature): # pyright: ignore[reportPrivateImportUsage]
+        if isinstance(element, music21.meter.TimeSignature):  # pyright: ignore[reportPrivateImportUsage]
             time_signature = element.numerator
             continue
 

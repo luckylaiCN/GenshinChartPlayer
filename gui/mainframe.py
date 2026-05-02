@@ -18,7 +18,7 @@ from session.manager import JSONSessionManager
 
 
 class MainFrame(ctk.CTkFrame):
-    master: ctk.CTk
+    master: ctk.CTk # pyright: ignore[reportIncompatibleVariableOverride]
     topmost: bool = False
     jm: JSONSessionManager
 
