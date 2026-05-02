@@ -6,7 +6,7 @@ from contextlib import suppress
 from session.base import RecoverableWidget, ConfigurationItem, VERSION
 from shared.utils import SYSTEM_USER_UNIQUE_ID
 from shared.settings import SESSION_FILE_PATH
-from shared.rtjson import RTJSON
+from session.store import JSONSessionStore, SessionStore
 
 class JSONSessionData(TypedDict):
     version: int
@@ -17,22 +17,18 @@ class JSONSessionData(TypedDict):
 class JSONSessionManager:
     registered_widgets: dict[str, RecoverableWidget]
     registered_configurations: dict[str, ConfigurationItem]
-    session_file_path: str
+    session_store: SessionStore
     owner: str
     new_user: bool = True
     version: int = -1
-    rt_json: RTJSON[dict[str, JSONSessionData]]
 
     def __init__(self, session_file_path: str = SESSION_FILE_PATH) -> None:
         self.registered_configurations = {}
         self.registered_widgets = {}
-        self.session_file_path = session_file_path
+        self.session_store = JSONSessionStore(session_file_path)
         self.owner = SYSTEM_USER_UNIQUE_ID
         self.new_user = True
         self.version = -1
-        self.rt_json = RTJSON[dict[str, JSONSessionData]](
-            self.session_file_path, default_data={}
-        )
 
     def register_widget(self, name: str, widget: RecoverableWidget) -> None:
         self.registered_widgets[name] = widget
@@ -43,12 +39,12 @@ class JSONSessionManager:
         self.registered_configurations[name] = configuration
 
     def cleanup_outdated_sessions(self) -> None:
-        all_data = self.rt_json.load()
+        all_data = self.session_store.load()
         valid_data: dict[str, JSONSessionData] = {}
         for owner, data in all_data.items():
             if data.get("version", -1) == VERSION:
                 valid_data[owner] = data
-        self.rt_json.save(valid_data)
+        self.session_store.save(valid_data)
 
     def _dump_session_kw(self) -> dict[str, JSONSessionData]:
         widgets_data: dict[str, Any] = {}
@@ -81,12 +77,12 @@ class JSONSessionManager:
                     config.load_configuration(configurations[name])
 
     def load_configurations(self) -> None:
-        all_data = self.rt_json.load()
+        all_data = self.session_store.load()
         if self.owner in all_data:
             self._load_user_session(all_data[self.owner])
         self.cleanup_outdated_sessions()
 
     def save_configurations(self) -> None:
-        all_data = self.rt_json.load()
+        all_data = self.session_store.load()
         all_data.update(self._dump_session_kw())
-        self.rt_json.save(all_data)
+        self.session_store.save(all_data)

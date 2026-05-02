@@ -1,6 +1,11 @@
 import time
 
-import keyboard
+from shared.global_hotkeys import (
+    register_key_down,
+    register_key_up,
+    unregister_key_down,
+    unregister_key_up,
+)
 
 from typing import Callable
 from contextlib import suppress
@@ -145,9 +150,15 @@ class PracticeController:
         if key in [k for _, k in self.waiting_keys]:
             if key not in self.pressed_keys:
                 self.pressed_keys.append(key)
-                self.waiting_keys = [
-                    (beat_index, k) for beat_index, k in self.waiting_keys if k != key
-                ]
+                # Remove only the first matching waiting_key entry to handle repeated keys correctly
+                found = False
+                new_waiting_keys = []
+                for beat_index, k in self.waiting_keys:
+                    if k == key and not found:
+                        found = True  # Skip this entry (remove the first occurrence)
+                    else:
+                        new_waiting_keys.append((beat_index, k))
+                self.waiting_keys = new_waiting_keys
 
     def on_key_release(self, key: ChartKey) -> None:
         if key in self.pressed_keys:
@@ -155,21 +166,21 @@ class PracticeController:
 
     def key_listener_register(self) -> None:
         for key in KEYBOARD_INDEX_TABLE:
-            self.hooks.append(
-                keyboard.on_press_key(
-                    key.lower(), lambda _, k=key: self.on_key_press(k)
-                )
-            )
-            self.hooks.append(
-                keyboard.on_release_key(
-                    key.lower(), lambda _, k=key: self.on_key_release(k)
-                )
-            )
+            k = key.lower()
+            cb_down = lambda k2=key: self.on_key_press(k2)
+            cb_up = lambda k2=key: self.on_key_release(k2)
+            register_key_down(k, cb_down)
+            register_key_up(k, cb_up)
+            self.hooks.append((k, cb_down, cb_up))
 
     def release_all_listeners(self) -> None:
-        for hook in self.hooks:
-            with suppress(KeyError):
-                keyboard.unhook(hook)
+        for item in self.hooks:
+            try:
+                k, cb_down, cb_up = item
+                unregister_key_down(k, cb_down)
+                unregister_key_up(k, cb_up)
+            except Exception:
+                pass
         self.hooks.clear()
 
     def __del__(self):

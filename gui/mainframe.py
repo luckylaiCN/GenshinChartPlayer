@@ -13,7 +13,7 @@ from gui.theme import curr_theme
 from gui.utils import ask_open_file_dialog, ask_save_file_dialog, show_file_in_explorer
 from shared.settings import ACCEPTED_FILE_EXTENSIONS
 from shared.utils import should_request_admin_privileges, ask_for_admin_privileges
-from player.handlers import imported_handler_modules
+from player.handlers import iter_handler_modules, get_handler_module
 from session.manager import JSONSessionManager
 
 
@@ -163,7 +163,7 @@ class MainFrame(ctk.CTkFrame):
             menu_name="Player Handler",
         )
         self.handler_items = {}
-        for handler_name, module in imported_handler_modules.items():
+        for handler_name, module in iter_handler_modules():
             handler_menu_item = Menu(
                 master=self.handler_selection_menu_item,
                 menu_name=module.name(),
@@ -355,7 +355,7 @@ class MainFrame(ctk.CTkFrame):
 
     def default_settings(self) -> None:
         default_handler = "player.handlers.sound_h"
-        if default_handler in imported_handler_modules.keys():
+        if get_handler_module(default_handler) is not None:
             self.set_handler(default_handler, silent=True)
 
         if should_request_admin_privileges():

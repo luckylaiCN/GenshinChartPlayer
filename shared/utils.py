@@ -113,6 +113,22 @@ class OperationLock:
 
 global_operation_lock = OperationLock()
 
+
+def is_operation_free() -> bool:
+    return global_operation_lock.is_free()
+
+
+def get_operation_state() -> OperationLockState:
+    return global_operation_lock.state
+
+
+def set_operation_state(new_state: OperationLockState) -> None:
+    global_operation_lock.set_state(new_state)
+
+
+def release_operation() -> None:
+    global_operation_lock.release()
+
 WARNING_CHARACTER = "⚠️"
 ERROR_CHARACTER = "❌"
 

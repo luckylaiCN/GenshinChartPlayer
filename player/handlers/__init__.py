@@ -1,6 +1,6 @@
 import importlib
 
-from typing import Protocol
+from typing import ItemsView, Protocol
 from player.pattern import NoteContainer
 from player.utils import FlagBoolean
 
@@ -73,4 +73,23 @@ if fallback_handler_module_name not in imported_handler_modules:
     
 fallback_module = imported_handler_modules[fallback_handler_module_name]
 
-__all__ = ["imported_handler_modules", "HandlerProtocol", "fallback_module"]
+def iter_handler_modules() -> ItemsView[str, HandlerProtocol]:
+    return imported_handler_modules.items()
+
+
+def get_handler_module(handler_name: str) -> HandlerProtocol | None:
+    return imported_handler_modules.get(handler_name)
+
+
+def get_fallback_handler_module() -> HandlerProtocol:
+    return fallback_module
+
+
+__all__ = [
+    "imported_handler_modules",
+    "HandlerProtocol",
+    "fallback_module",
+    "iter_handler_modules",
+    "get_handler_module",
+    "get_fallback_handler_module",
+]

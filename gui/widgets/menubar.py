@@ -4,6 +4,7 @@ import keyboard
 import threading
 
 from typing import Callable, Optional
+from shared.global_hotkeys import register_hotkey, unregister_hotkey
 
 from gui.theme import curr_theme
 from gui.utils import get_root_widget, translate_tkinter_bind_to_hotkey
@@ -35,6 +36,7 @@ class Menu(ctk.CTkFrame):
     parent_menu: Optional["Menu"] = None
     hot_key_name: str = ""
     _hook: Optional[Callable[[], None]] = None
+    _hook_hotkey: Optional[str] = None
 
     def __init__(
         self,
@@ -76,20 +78,19 @@ class Menu(ctk.CTkFrame):
                 raise ValueError("Hotkeys can only be registered for sub-menus")
             self.hot_key_name = translate_tkinter_bind_to_hotkey(hotkey)
             if is_super_command:
-                # self._hook = keyboard.add_hotkey(
-                #     self.hot_key_name.lower(),
-                #     lambda: self._command() if self._command is not None else None,
-                # )
-                threading.Thread(target=self._hot_key_listener, daemon=True).start()
-                # so what is the problem with keyboard module hotkey registration?
+                # register global hotkey via pynput-based manager
+                try:
+                    register_hotkey(self.hot_key_name, lambda: self._invoke_command())
+                    self._hook_hotkey = self.hot_key_name
+                except Exception:
+                    # fallback to thread-based keyboard wait if registration fails
+                    threading.Thread(target=self._hot_key_listener, daemon=True).start()
             else:
                 # register hotkey to open this menu
                 root = get_root_widget(self)
                 root.bind_all(
                     hotkey,
-                    lambda event: self._command()
-                    if self._command is not None
-                    else None,
+                    lambda event: self._invoke_command(),
                 )
 
         self.create_widgets()
@@ -102,19 +103,23 @@ class Menu(ctk.CTkFrame):
             if self.hot_key_name:
                 if self._command is not None:
                     keyboard.wait(self.hot_key_name.lower())
-                    self._command()
+                    self._invoke_command()
 
     def _reupdate_hook(self):
         # we have to remove and re-add the hotkey occasionally
         # sometimes keyboard module fails to trigger the hotkey otherwise
 
         # oops: it seems not working at all
-        if self._hook is not None:
-            keyboard.remove_hotkey(self._hook)
-            self._hook = keyboard.add_hotkey(
-                self.hot_key_name.lower(),
-                lambda: self._command() if self._command is not None else None,
-            )
+        if self._hook_hotkey is not None:
+            try:
+                unregister_hotkey(self._hook_hotkey)
+            except Exception:
+                pass
+            try:
+                register_hotkey(self.hot_key_name, lambda: self._invoke_command())
+                self._hook_hotkey = self.hot_key_name
+            except Exception:
+                self._hook_hotkey = None
         UPDATE_INTERVAL_MS = 1 * 60 * 1000  # 1 minute
         self.after(UPDATE_INTERVAL_MS, self._reupdate_hook)
 
@@ -125,6 +130,23 @@ class Menu(ctk.CTkFrame):
             self.create_widget_sub_menu()
         # events after creation
         self.after(100, self._focus_checker)
+
+    def _invoke_command(self):
+        # Debounce rapid duplicate invocations from multiple key listeners
+        if self._command is None:
+            return
+        now = time.time()
+        last = getattr(self, "_last_invoke", 0)
+        # ignore repeated triggers within 300ms
+        if now - last < 0.3:
+            return
+        self._last_invoke = now
+        try:
+            self._command()
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
 
     def create_widget_top_level(self):
         self.button = ctk.CTkButton(
@@ -148,6 +170,8 @@ class Menu(ctk.CTkFrame):
             corner_radius=0,
             # height=25,
         )
+        # ensure global hotkey unregistered when widget destroyed
+        self.bind("<Destroy>", lambda event: unregister_hotkey(self._hook_hotkey) if self._hook_hotkey else None)
 
     def _focus_checker(self, loop: bool = True):
         mouse_x, mouse_y = get_root_widget(self).winfo_pointerxy()

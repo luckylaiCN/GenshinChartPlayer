@@ -189,6 +189,14 @@ class ChartRuntime:
         return stream
 
 
+def build_chart_runtime(
+    lines: list[Line], internal_property: InternalProperty | None = None
+) -> ChartRuntime:
+    runtime = ChartRuntime(internal_property or InternalProperty(), lines)
+    runtime.caculate_playlist()
+    return runtime
+
+
 NotePlayHandler = Callable[
     [NoteContainer, FlagBoolean, float], None
 ]  # args: note_container, stop_flag, begin_time

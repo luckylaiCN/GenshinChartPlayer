@@ -7,8 +7,7 @@ from typing import Callable, TypedDict
 from contextlib import suppress
 
 from player.pattern import PatternMismatchException
-from player.runtime import ChartRuntime
-from player.interal import InternalProperty
+from player.runtime import ChartRuntime, build_chart_runtime
 from player.command import CommandParseException
 from player.musicxml import convert_musicxml_stream_to_chart_str
 from chart.parser import ChartParseException, parse_chart, BeatLine
@@ -18,7 +17,8 @@ from gui.theme import curr_theme
 from gui.widgets.toast import raise_toast
 from shared.settings import EDITOR_FONT_FAMILY
 from shared.utils import (
-    global_operation_lock,
+    get_operation_state,
+    is_operation_free,
     OperationLockState,
     WARNING_CHARACTER,
     ERROR_CHARACTER,
@@ -294,15 +294,15 @@ class MultipleFileTabFrame(ctk.CTkTabview):
         The param tab_name is a design mistake, as the close button always applies to the current tab,
              but it is kept for now to avoid refactoring the close button command.
         """
-        if not global_operation_lock.is_free():
-            if global_operation_lock.state == OperationLockState.PLAYING:
+        if not is_operation_free():
+            if get_operation_state() == OperationLockState.PLAYING:
                 raise_toast(
                     self,
                     "Cannot close tab while playing is in progress.",
                     duration=3000,
                 )
                 return
-            if global_operation_lock.state == OperationLockState.PRACTICING:
+            if get_operation_state() == OperationLockState.PRACTICING:
                 # TODO: practice mode handling.
                 pass
         tab_name = tab_name or self.get()
@@ -379,7 +379,7 @@ class MultipleFileTabFrame(ctk.CTkTabview):
     def add_file_tab(self, file_tab: FileTab):
         tab_name = file_tab.tab_identifier
         self.add(tab_name)
-        is_busy = not global_operation_lock.is_free()
+        is_busy = not is_operation_free()
         if not is_busy:
             self.set(tab_name)  # don't switch if it's busy
         if file_tab.source_path is not None:
@@ -518,7 +518,7 @@ class EditorFrame(ctk.CTkFrame):
         self._listen_insert_cursor()
 
     def _on_cursor_move(self, target_index: int | None = None):
-        if not global_operation_lock.is_free():
+        if not is_operation_free():
             return
         if target_index is None:
             return
@@ -663,7 +663,7 @@ class EditorFrame(ctk.CTkFrame):
 
     def format_chart(self) -> None:
         # reject if playing, practicing or no tab opened
-        if not global_operation_lock.is_free():
+        if not is_operation_free():
             raise_toast(
                 self,
                 "Cannot format chart while another operation is in progress.",
@@ -755,10 +755,8 @@ class EditorFrame(ctk.CTkFrame):
         self.set_secondary_line_tags(secondary_lines)
         self.set_comment_tags(comments_str)
 
-        ip = InternalProperty()
-        runtime = ChartRuntime(ip, lines)
         try:
-            runtime.caculate_playlist()
+            runtime = build_chart_runtime(lines)
         except PatternMismatchException as e:
             messages.append(e)
             warning_positions = [(warn.begin_str, warn.end_str) for warn in e.warnings]

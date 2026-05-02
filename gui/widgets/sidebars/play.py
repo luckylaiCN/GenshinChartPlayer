@@ -1,5 +1,4 @@
 import time
-import threading
 
 import customtkinter as ctk
 
@@ -8,10 +7,16 @@ from gui.widgets.sidebars.base import FunctionalFrame
 from gui.widgets.editor import EditorFrame
 from gui.widgets.toast import raise_toast
 from gui.widgets.floating import FloatingChartDisplay
-from shared.utils import global_operation_lock, OperationLockState, FlagBoolean
-from player.runtime import PlayerThreadingPool
-from player.handlers import imported_handler_modules, fallback_module
-from player.practice import PracticeController
+from shared.utils import (
+    is_operation_free,
+    set_operation_state,
+    release_operation,
+    OperationLockState,
+    FlagBoolean,
+)
+from player.service import PlaybackService
+from player.practice_service import PracticeService
+from player.handlers import get_handler_module, get_fallback_handler_module
 
 PLAY_CHARACTER = "▶"
 PAUSE_CHARACTER = "⏯"
@@ -24,8 +29,8 @@ class PlayFunctionalFrame(FunctionalFrame):
     is_playing: bool = False
     is_practicing: bool = False
     handler_name: str = ""
-    ptp: PlayerThreadingPool | None = None
-    pc: PracticeController | None = None
+    playback_service: PlaybackService | None = None
+    practice_service: PracticeService | None = None
     begin_time: float = 0.0
     floating_display: FloatingChartDisplay | None = None
     floating_display_visible: FlagBoolean = FlagBoolean(False)
@@ -40,14 +45,16 @@ class PlayFunctionalFrame(FunctionalFrame):
 
     @property
     def handler_string(self) -> str:
-        handler = imported_handler_modules.get(
-            self.handler_name, fallback_module
-        )
+        handler = get_handler_module(self.handler_name) or get_fallback_handler_module()
         if handler is None:
             return "No Handler"
         return handler.name()
 
     def create_widgets(self):
+        if self.playback_service is None:
+            self.playback_service = PlaybackService()
+        if self.practice_service is None:
+            self.practice_service = PracticeService()
         # button group
         self.button_group = ctk.CTkFrame(self, fg_color=curr_theme.BG_SECONDARY)
         # text label
@@ -144,14 +151,23 @@ class PlayFunctionalFrame(FunctionalFrame):
             return False
         return True
 
+    def _is_playback_running(self) -> bool:
+        if self.is_playing:
+            return True
+        if self.playback_service is None:
+            return False
+        return self.playback_service.is_running()
+
     def _player_start(self, reset=False) -> bool:
         if not self._check_before_playing():
             return False
         if self.binded_editor is None or self.binded_editor.runtime is None:
             return False
+        if self._is_playback_running():
+            return False
 
         runtime = self.binded_editor.runtime
-        handler_module = imported_handler_modules.get(self.handler_name, None)
+        handler_module = get_handler_module(self.handler_name)
         if handler_module is None:
             raise_toast(
                 master=self,
@@ -164,29 +180,27 @@ class PlayFunctionalFrame(FunctionalFrame):
         self.is_playing = True
         # disable speed change during playing, as it may cause unexpected issues. can be changed in the future if needed.
         self.speed_slider.configure(state="disabled")
-        ip = runtime.internal_property
-        ip.set_speed_multiplier(self.chart_speed)
-        runtime.caculate_playlist()
         self.play_pause_button.configure(text=PAUSE_CHARACTER)
-        global_operation_lock.set_state(OperationLockState.PLAYING)
-        self.ptp = PlayerThreadingPool(
-            beats=runtime.get_playlist(),
-            handler=handler_module.handler,
-        )
+        set_operation_state(OperationLockState.PLAYING)
+        if self.playback_service is None:
+            self.playback_service = PlaybackService()
         beat = 0 if reset else self.binded_editor._curr_beat_index
-        if beat < 0 or beat >= len(self.ptp.beats):
+        if beat < 0 or beat >= len(runtime.get_playlist()):
             beat = 0
 
         if self.floating_display is not None and self.floating_display.alive.get():
             self.floating_display.set_runtime(runtime)
             self.floating_display.set_beat_index(beat)
 
-        self.ptp.set_beat_index(beat)
+        self.begin_time = self.playback_service.start(
+            runtime=runtime,
+            handler_module=handler_module,
+            speed_multiplier=self.chart_speed,
+            beat_index=beat,
+        )
+        self.playback_service.set_beat_index(beat)
         self.binded_editor.set_current_beat_index(beat)
 
-        threading.Thread(target=self.ptp.play_loop).start()
-
-        self.begin_time = self.ptp.play()
         self.binded_editor.modify_editable(False)
 
         self.after(100, self._update_editor_current_beat)
@@ -194,9 +208,11 @@ class PlayFunctionalFrame(FunctionalFrame):
         return True
 
     def _update_editor_current_beat(self):
-        if self.binded_editor is None or self.ptp is None:
+        if self.binded_editor is None or self.playback_service is None:
             return
-        if self.ptp.stop_flag.get():
+        if self.playback_service.ptp is None:
+            return
+        if self.playback_service.ptp.stop_flag.get():
             if self.is_playing:
                 self._player_stop()
             return
@@ -227,8 +243,8 @@ class PlayFunctionalFrame(FunctionalFrame):
             self.floating_display.set_beat_index(index)
 
     def _player_stop(self, reset=False):
-        if self.ptp is not None:
-            self.ptp.stop()
+        if self.playback_service is not None:
+            self.playback_service.stop()
         if reset and self.binded_editor is not None:
             self.binded_editor.set_current_beat_index(0)
         if self.binded_editor is not None:
@@ -237,7 +253,7 @@ class PlayFunctionalFrame(FunctionalFrame):
             self.floating_display.remove_tags()
         self.is_playing = False
         self.play_pause_button.configure(text=PLAY_CHARACTER)
-        global_operation_lock.release()
+        release_operation()
         self.speed_slider.configure(state="normal")
 
     def handle_play_pause(self):
@@ -247,7 +263,7 @@ class PlayFunctionalFrame(FunctionalFrame):
             self._player_stop()
 
         else:
-            if global_operation_lock.is_free():
+            if is_operation_free():
                 self._player_start()
 
             else:
@@ -266,7 +282,7 @@ class PlayFunctionalFrame(FunctionalFrame):
         if self.is_playing:
             self._player_stop(reset=True)
         else:
-            if global_operation_lock.is_free():
+            if is_operation_free():
                 self._player_start(reset=True)
             else:
                 raise_toast(
@@ -280,7 +296,7 @@ class PlayFunctionalFrame(FunctionalFrame):
     def request_play(self) -> bool:
         if not self._check_before_playing():
             return False
-        if global_operation_lock.is_free():
+        if is_operation_free() and not self._is_playback_running():
             self._player_start()
             return True
         else:
@@ -309,7 +325,7 @@ class PlayFunctionalFrame(FunctionalFrame):
     def request_play_from_start(self) -> bool:
         if not self._check_before_playing():
             return False
-        if global_operation_lock.is_free():
+        if is_operation_free() and not self._is_playback_running():
             return self._player_start(reset=True)
         else:
             raise_toast(
@@ -366,7 +382,7 @@ class PlayFunctionalFrame(FunctionalFrame):
             self._practice_stop(reset=reset)
             self.pratice_mode_button.configure(text="Practice Mode")
         else:
-            if global_operation_lock.is_free():
+            if is_operation_free():
                 if not self._practice_start(reset=reset):
                     return
                 self.pratice_mode_button.configure(text="Exit Practice Mode")
@@ -390,26 +406,32 @@ class PlayFunctionalFrame(FunctionalFrame):
             self.floating_display.set_runtime(runtime)
 
         self.is_practicing = True
-        global_operation_lock.set_state(OperationLockState.PRACTICING)
-        self.pc = PracticeController(
-            beat_containers=runtime.get_playlist(),
-            on_update_index=self._update_widgets_index,
-            on_stop=self._on_practice_stop,
-        )
+        set_operation_state(OperationLockState.PRACTICING)
         beat = self.binded_editor._curr_beat_index
-        if beat < 0 or beat >= len(self.pc.beat_containers):
+        if beat < 0 or beat >= len(runtime.get_playlist()):
             beat = 0
         if reset:
             beat = 0
-        threading.Thread(target=self.pc.start, args=(beat,)).start()
+        if self.practice_service is None:
+            self.practice_service = PracticeService()
+        started = self.practice_service.start(
+            beat_containers=runtime.get_playlist(),
+            begin_beat_index=beat,
+            on_update_index=self._update_widgets_index,
+            on_stop=self._on_practice_stop,
+        )
+        if not started:
+            self.is_practicing = False
+            release_operation()
+            return False
         self._update_widgets_index(beat)
         self.binded_editor.modify_editable(False)
 
         return True
 
     def _practice_stop(self, reset=False):
-        if self.pc is not None:
-            self.pc.stop()
+        if self.practice_service is not None:
+            self.practice_service.stop()
         if reset and self.binded_editor is not None:
             self.binded_editor.set_current_beat_index(0)
         if self.binded_editor is not None:
@@ -417,14 +439,14 @@ class PlayFunctionalFrame(FunctionalFrame):
         if self.floating_display is not None and self.floating_display.alive.get():
             self.floating_display.remove_tags()
         self.is_practicing = False
-        global_operation_lock.release()
+        release_operation()
 
     def _on_practice_stop(self) -> None:
         if self.binded_editor is not None:
             self.binded_editor.modify_editable(True)
         self.is_practicing = False
         self.pratice_mode_button.configure(text="Practice Mode")
-        global_operation_lock.release()
+        release_operation()
 
     def _on_destroy(self) -> None:
         self.disable_floating_display()
