@@ -75,6 +75,13 @@ class FloatingChartDisplay(FloatingWidget):
     ):
         super().__init__(*args, **kwargs)
         self.chart_runtime = runtime
+        self._track_label = ctk.CTkLabel(
+            self._dragging_frame,
+            text="",
+            text_color=curr_theme.TEXT_SECONDARY,
+            font=ctk.CTkFont(size=11),
+        )
+        self._track_label.pack(side="left", padx=10)
         self.display_textbox = ctk.CTkTextbox(
             self,
             # width=400,
@@ -111,6 +118,15 @@ class FloatingChartDisplay(FloatingWidget):
     def set_beat_index(self, index: int) -> None:
         self.curr_beat_index = index
         self._update_display()
+
+    def set_playlist_track_info(self, current: str, next_title: str | None = None) -> None:
+        if not current:
+            self._track_label.configure(text="")
+            return
+        text = f"\u266b {current}"
+        if next_title:
+            text += f"  \u2192  {next_title}"
+        self._track_label.configure(text=text)
 
     def _calculate_chart_line_pair(self) -> None:
         self.chart_line_remap = []

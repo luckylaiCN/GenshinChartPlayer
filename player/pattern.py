@@ -210,8 +210,8 @@ def get_notes_pattern_in_beat(
                     operating_note, begin_time, current_duration, minimum_time_unit
                 )
                 note_containers.extend(note_patterns)
-                # Update current_time to the actual end of the previous notea
-                current_time = begin_time + current_duration
+                # Keep any space-based advance; only move forward to the actual end if needed
+                current_time = max(current_time, begin_time + current_duration)
             begin_time = current_time
             operating_note = note
             current_time += minimum_time_unit

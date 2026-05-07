@@ -23,7 +23,8 @@ class PlaybackService:
         runtime.caculate_playlist()
 
         self.ptp = PlayerThreadingPool(
-            beats=runtime.get_playlist(), handler=handler_module.handler
+            beats=runtime.get_playlist(), handler=handler_module.handler,
+            speed_multiplier=speed_multiplier,
         )
         self.set_beat_index(beat_index)
         self.begin_time = self.ptp.play()

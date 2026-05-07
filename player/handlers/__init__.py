@@ -20,6 +20,7 @@ handler_modules = [
     "player.handlers.sound_h",
     "player.handlers.donothing_h",
     "player.handlers.keyboard_h",
+    "player.handlers.keyboard_longpress_h",
 ]
 
 
@@ -63,15 +64,15 @@ for module_name in handler_modules:
 
 fallback_handler_module_name = "player.handlers.donothing_h"
 if fallback_handler_module_name not in imported_handler_modules:
-    fallback_module = import_safe(fallback_handler_module_name)
-    if fallback_module is not None:
-        imported_handler_modules[fallback_handler_module_name] = fallback_module
+    fallback_candidate = import_safe(fallback_handler_module_name)
+    if fallback_candidate is not None:
+        imported_handler_modules[fallback_handler_module_name] = fallback_candidate
     else:
         raise ImportError(
             f"Failed to import fallback handler module '{fallback_handler_module_name}'. No valid handlers available."
         )
     
-fallback_module = imported_handler_modules[fallback_handler_module_name]
+fallback_module: HandlerProtocol = imported_handler_modules[fallback_handler_module_name]
 
 def iter_handler_modules() -> ItemsView[str, HandlerProtocol]:
     return imported_handler_modules.items()

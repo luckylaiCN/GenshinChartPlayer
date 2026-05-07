@@ -135,14 +135,32 @@ class Menu(ctk.CTkFrame):
         # Debounce rapid duplicate invocations from multiple key listeners
         if self._command is None:
             return
+        command = self._command
         now = time.time()
         last = getattr(self, "_last_invoke", 0)
         # ignore repeated triggers within 300ms
         if now - last < 0.3:
             return
         self._last_invoke = now
+
+        def run_command() -> None:
+            try:
+                command()
+            except Exception:
+                import traceback
+
+                traceback.print_exc()
+
+        if threading.current_thread() is not threading.main_thread():
+            try:
+                root = get_root_widget(self)
+                root.after(0, run_command)
+            except Exception:
+                run_command()
+            return
+
         try:
-            self._command()
+            run_command()
         except Exception:
             import traceback
 

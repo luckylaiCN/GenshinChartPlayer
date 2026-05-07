@@ -39,6 +39,9 @@ class MainFrame(ctk.CTkFrame):
         self.jm.register_widget("editor", self.editor_frame)
         self.jm.register_widget("sidebar", self.sidebar_frame)
         self.jm.register_configuration("color_theme", curr_theme)
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            self.jm.register_widget("play_player", play_frame)
         self.jm.load_configurations()
         self.update_all_colors()
 
@@ -242,11 +245,56 @@ class MainFrame(ctk.CTkFrame):
 
         self.player_menu.add_separator()
 
+        self.next_track_menu_item = Menu(
+            master=self.player_menu,
+            menu_name="Next Track",
+            command=self.player_handle_next_track,
+            hotkey="<Alt-Right>",
+            is_super_command=True,
+        )
+        self.prev_track_menu_item = Menu(
+            master=self.player_menu,
+            menu_name="Previous Track",
+            command=self.player_handle_prev_track,
+            hotkey="<Alt-Left>",
+            is_super_command=True,
+        )
+
+        self.player_menu.add_separator()
+
         self.enable_floating_display_menu_item = Menu(
             master=self.player_menu,
             menu_name="Toggle Floating Display",
             command=self.toggle_floating_display,
             hotkey="<F12>",
+            is_super_command=True,
+        )
+
+        self.player_menu.add_separator()
+
+        self.toggle_playlist_window_item = Menu(
+            master=self.player_menu,
+            menu_name="Toggle Playlist Window",
+            command=self.toggle_playlist_window,
+            hotkey="<F9>",
+            is_super_command=True,
+        )
+
+        self.player_menu.add_separator()
+
+        self.playlist_play_item = Menu(
+            master=self.player_menu,
+            menu_name="Playlist Play/Pause",
+            command=self.playlist_handle_play_pause,
+            hotkey="<F10>",
+            is_super_command=True,
+        )
+
+        self.playlist_stop_item = Menu(
+            master=self.player_menu,
+            menu_name="Playlist Stop",
+            command=self.playlist_handle_stop,
+            hotkey="<F11>",
             is_super_command=True,
         )
 
@@ -261,13 +309,13 @@ class MainFrame(ctk.CTkFrame):
         play_frame = self.sidebar_frame.get_functional_frame("Player")
         if isinstance(play_frame, PlayFunctionalFrame):
             play_frame.set_handler(handler_name)
-            if not silent:
-                raise_toast(
-                    master=self,
-                    message="Player handler changed successfully.",
-                    duration=2000,
-                    position="center",
-                )
+        if not silent:
+            raise_toast(
+                master=self,
+                message="Player handler changed successfully.",
+                duration=2000,
+                position="center",
+            )
 
     def toggle_topmost(self) -> None:
         self.topmost = not self.topmost
@@ -302,6 +350,7 @@ class MainFrame(ctk.CTkFrame):
         if isinstance(play_frame, PlayFunctionalFrame):
             play_frame.bind_editor(self.editor_frame)
             self.editor_frame.register_callback(lambda _: play_frame.on_tab_switched())
+            self.editor_frame.register_playlist_add_callback(play_frame._pl_on_add_current)
 
     def save_current_file(self) -> None:
         curr_tab = self.editor_frame.text_areas.get_current_file_tab()
@@ -488,10 +537,35 @@ class MainFrame(ctk.CTkFrame):
         if isinstance(play_frame, PlayFunctionalFrame):
             play_frame.toggle_floating_display()
 
+    def toggle_playlist_window(self) -> None:
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame.toggle_playlist_window()
+
+    def playlist_handle_play_pause(self) -> None:
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame._pl_on_play_pause()
+
+    def playlist_handle_stop(self) -> None:
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame._pl_on_stop()
+
     def player_handle_practice(self, reset=False) -> None:
         play_frame = self.sidebar_frame.get_functional_frame("Player")
         if isinstance(play_frame, PlayFunctionalFrame):
             play_frame.toggle_practice_mode(reset=reset)
+
+    def player_handle_next_track(self) -> None:
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame._pl_on_next()
+
+    def player_handle_prev_track(self) -> None:
+        play_frame = self.sidebar_frame.get_functional_frame("Player")
+        if isinstance(play_frame, PlayFunctionalFrame):
+            play_frame._pl_on_prev()
 
     def quit_application(self) -> None:
         self.master.quit()

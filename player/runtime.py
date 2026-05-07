@@ -210,9 +210,10 @@ class PlayerThreadingPool:
     ADVANCE_TIME: float = 3.0
     handler: NotePlayHandler
 
-    def __init__(self, beats: list[BeatContainer], handler: NotePlayHandler) -> None:
+    def __init__(self, beats: list[BeatContainer], handler: NotePlayHandler, speed_multiplier: float = 1.0) -> None:
         self.beats = beats
         self.handler = handler
+        self.speed_multiplier = speed_multiplier
         self.stop_flag = FlagBoolean(False)
         self.begin_time = 0.0
         self.current_beat_index = 0
@@ -236,6 +237,14 @@ class PlayerThreadingPool:
                     target=self.beat_handler, args=(beat_container,)
                 ).start()
             self.current_beat_index += 1
+
+        if self.current_beat_index >= len(self.beats) and self.beats:
+            last_beat = self.beats[-1]
+            beat_duration = 60.0 / last_beat.bpm / self.speed_multiplier
+            end_time = last_beat.begin_time + self.begin_time + beat_duration
+            wait_until_or_cancel(end_time, self.stop_flag)
+
+        self.stop_flag.modify(True)
 
     def beat_handler(self, beat_container: BeatContainer) -> None:
         status = wait_until_or_cancel(

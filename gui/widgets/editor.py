@@ -507,6 +507,8 @@ class EditorFrame(ctk.CTkFrame):
     _insert_cursor_index: int = 0
     _curr_beat_index: int = -1
     can_edit: bool = True
+    _playlist_add_callback: Callable[[], None] | None = None
+    TOOLBAR_HEIGHT = 30
 
     def __init__(
         self, master=None, callback: Callable[[str], None] | None = None, **kwargs
@@ -516,6 +518,9 @@ class EditorFrame(ctk.CTkFrame):
         self.create_widgets()
         self.callback_on_tab_switch = callback
         self._listen_insert_cursor()
+
+    def register_playlist_add_callback(self, callback: Callable[[], None]) -> None:
+        self._playlist_add_callback = callback
 
     def _on_cursor_move(self, target_index: int | None = None):
         if not is_operation_free():
@@ -578,27 +583,47 @@ class EditorFrame(ctk.CTkFrame):
         self.callback_on_tab_switch = callback
 
     def create_widgets(self):
-        # use rowconfigure and columnconfigure to make the text area expand with the window
-        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
+
+        self.toolbar = ctk.CTkFrame(
+            self, fg_color=curr_theme.BG_SECONDARY, height=self.TOOLBAR_HEIGHT
+        )
+        self.toolbar.grid(row=0, column=0, sticky="ew", padx=0, pady=(10, 0))
+        self.toolbar.grid_propagate(False)
+
+        self.add_pl_btn = ctk.CTkButton(
+            self.toolbar,
+            text="+ Playlist",
+            command=self._on_add_to_playlist,
+            fg_color=curr_theme.BTN_PRIMARY,
+            height=24,
+            font=ctk.CTkFont(size=12),
+        )
+        self.add_pl_btn.pack(side="right", padx=5, pady=2)
+
         self.text_areas = MultipleFileTabFrame(
             self,
             fg_color=curr_theme.BG_SECONDARY,
             border_width=2,
             border_color=curr_theme.BORDER_COLOR,
         )
-        self.text_areas.grid(row=0, column=0, sticky="nsew", padx=0, pady=10)
+        self.text_areas.grid(row=1, column=0, sticky="nsew", padx=0, pady=10)
         self.command_frame = ExpandableCommandFrame(
             self,
             title="Errors/Warnings",
             fg_color=curr_theme.BG_SECONDARY,
         )
-        self.command_frame.grid(row=1, column=0, sticky="ew", padx=0, pady=10)
+        self.command_frame.grid(row=2, column=0, sticky="ew", padx=0, pady=10)
         self.command_frame.content_frame.configure(height=100)
         self.bind("<Configure>", self.on_resize)
         self.text_areas.bind_on_switch_tab(self.on_tab_switch)
         self.text_areas.bind_on_text_change(self.on_text_change)
         self._apply_theme()
+
+    def _on_add_to_playlist(self) -> None:
+        if self._playlist_add_callback is not None:
+            self._playlist_add_callback()
 
     def on_tab_switch(self, tab_name: str):
         self.parse_current_chart()
@@ -617,11 +642,12 @@ class EditorFrame(ctk.CTkFrame):
         self.parse_current_chart()
 
     def on_resize(self, event):
+        reserved = self.TOOLBAR_HEIGHT + 40
         if self.command_frame.is_expanded:
-            new_height = self.winfo_height() - self.command_frame.winfo_height() - 40
+            new_height = self.winfo_height() - self.command_frame.winfo_height() - reserved
             self.text_areas.configure(height=new_height)
         else:
-            new_height = self.winfo_height() - 20
+            new_height = self.winfo_height() - reserved
             with suppress(AttributeError):
                 self.text_areas.configure(height=new_height)
 
@@ -755,6 +781,7 @@ class EditorFrame(ctk.CTkFrame):
         self.set_secondary_line_tags(secondary_lines)
         self.set_comment_tags(comments_str)
 
+        runtime: ChartRuntime | None = None
         try:
             runtime = build_chart_runtime(lines)
         except PatternMismatchException as e:
@@ -894,6 +921,8 @@ class EditorFrame(ctk.CTkFrame):
         self.text_areas._segmented_button.configure(
             text_color=curr_theme.TEXT_PRIMARY,
         )
+        self.toolbar.configure(fg_color=curr_theme.BG_SECONDARY)
+        self.add_pl_btn.configure(fg_color=curr_theme.BTN_PRIMARY)
 
     def _apply_theme(self) -> None:
         self.configure(fg_color=curr_theme.BG_SECONDARY)

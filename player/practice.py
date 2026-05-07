@@ -8,7 +8,6 @@ from shared.global_hotkeys import (
 )
 
 from typing import Callable
-from contextlib import suppress
 
 from chart.constants import KEYBOARD_INDEX_TABLE, ChartKey
 from player.pattern import NoteContainer
@@ -36,7 +35,7 @@ class PracticeController:
     waiting_keys: list[tuple[int, ChartKey]] = []  # keys that are waiting to be pressed
     pressed_keys: list[ChartKey] = []  # keys that have been pressed, wait for release
     should_stop: FlagBoolean = FlagBoolean(False)
-    hooks: list[Callable[[], None]] = []
+    hooks: list[tuple[str, Callable[[], None], Callable[[], None]]] = []
     on_update_index: Callable[[int], None] | None = None
     on_stop: Callable[[], None] | None = None
 
@@ -96,6 +95,11 @@ class PracticeController:
                     self.waiting_keys.append((beat_index, note.note.keyboard))
             self.remove_note_before_time(self.current_playing_time)
         self.release_all_listeners()
+        # mark as stopped so external checks (is_running) reflect completion
+        try:
+            self.should_stop.modify(True)
+        except Exception:
+            pass
         if self.on_stop is not None:
             self.on_stop()
 
@@ -167,8 +171,12 @@ class PracticeController:
     def key_listener_register(self) -> None:
         for key in KEYBOARD_INDEX_TABLE:
             k = key.lower()
-            cb_down = lambda k2=key: self.on_key_press(k2)
-            cb_up = lambda k2=key: self.on_key_release(k2)
+            def cb_down(k2: ChartKey = key) -> None:
+                self.on_key_press(k2)
+
+            def cb_up(k2: ChartKey = key) -> None:
+                self.on_key_release(k2)
+
             register_key_down(k, cb_down)
             register_key_up(k, cb_up)
             self.hooks.append((k, cb_down, cb_up))

@@ -31,18 +31,24 @@ def ask_open_folder_dialog() -> str | None:
     return None
 
 
-def ask_open_file_dialog(exts: list[str]) -> str | None:
-    """Open a file selection dialog and return the selected file path."""
+def ask_open_file_dialog(exts: list[str], multiple: bool = False) -> str | list[str] | None:
+    """Open a file selection dialog and return the selected file path(s)."""
     root = tk.Tk()
-    root.withdraw()  # Hide the root window
-    file_path = filedialog.askopenfilename(filetypes=[("Supported Files", exts)])
-    root.destroy()  # Destroy the root window
-    if len(file_path) == 0:
-        file_path = None
-
-    if file_path:
-        return os.path.abspath(file_path)
-    return None
+    root.withdraw()
+    if multiple:
+        file_paths = filedialog.askopenfilenames(filetypes=[("Supported Files", exts)])
+        root.destroy()
+        if not file_paths:
+            return None
+        return [os.path.abspath(fp) for fp in file_paths]
+    else:
+        file_path = filedialog.askopenfilename(filetypes=[("Supported Files", exts)])
+        root.destroy()
+        if len(file_path) == 0:
+            file_path = None
+        if file_path:
+            return os.path.abspath(file_path)
+        return None
 
 
 def ask_save_file_dialog(exts: list[str], default_filename: str = "") -> str | None:

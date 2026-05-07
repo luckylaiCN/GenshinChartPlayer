@@ -16,7 +16,12 @@ def _normalize_key(key) -> str:
         name = key.name
         if name is None:
             return ""
-        return name.lower()
+        name = name.lower()
+        # pynput reports left/right variants (alt_l, ctrl_r, shift_l, etc.)
+        # strip the suffix so hotkeys match regardless of which modifier side is pressed
+        if name.endswith("_l") or name.endswith("_r"):
+            name = name[:-2]
+        return name
     return str(key).lower()
 
 
@@ -32,34 +37,45 @@ class GlobalHotkeyManager:
         self._up_listeners: Dict[str, list[Callable[[], None]]] = {}
         self._last_trigger: Dict[FrozenSet[str], float] = {}
 
+    @staticmethod
+    def _dispatch_callbacks(callbacks: list[Callable[[], None]]) -> None:
+        for callback in callbacks:
+            def run(cb: Callable[[], None] = callback) -> None:
+                try:
+                    cb()
+                except Exception:
+                    traceback.print_exc()
+
+            threading.Thread(target=run, daemon=True).start()
+
     def start(self):
         with self._lock:
             if self._listener is not None:
                 return
+
             def on_press(key):
                 k = _normalize_key(key)
+                down_callbacks: list[Callable[[], None]] = []
+                hotkey_callbacks: list[Callable[[], None]] = []
                 if k:
                     first_press = k not in self._pressed
                     self._pressed.add(k)
-                    # call down listeners only on first press
                     if first_press:
-                        for cb in list(self._down_listeners.get(k, [])):
-                            try:
-                                cb()
-                            except Exception:
-                                traceback.print_exc()
-                self._check_hotkeys()
+                        down_callbacks = list(self._down_listeners.get(k, []))
+                    hotkey_callbacks = self._check_hotkeys() if first_press else []
+
+                self._dispatch_callbacks(down_callbacks)
+                self._dispatch_callbacks(hotkey_callbacks)
 
             def on_release(key):
                 k = _normalize_key(key)
+                up_callbacks: list[Callable[[], None]] = []
                 with self._lock:
                     if k in self._pressed:
                         self._pressed.remove(k)
-                        for cb in list(self._up_listeners.get(k, [])):
-                            try:
-                                cb()
-                            except Exception:
-                                traceback.print_exc()
+                        up_callbacks = list(self._up_listeners.get(k, []))
+                self._dispatch_callbacks(up_callbacks)
+
             self._listener = keyboard.Listener(on_press=on_press, on_release=on_release)
             self._listener.daemon = True
             self._listener.start()
@@ -128,22 +144,18 @@ class GlobalHotkeyManager:
                 except ValueError:
                     pass
 
-    def _check_hotkeys(self):
+    def _check_hotkeys(self) -> list[Callable[[], None]]:
         now = time.time()
+        callbacks_to_run: list[Callable[[], None]] = []
         with self._lock:
             pressed = set(self._pressed)
             for keyset, info in list(self._hotkeys.items()):
                 if keyset.issubset(pressed):
                     last = self._last_trigger.get(keyset, 0)
                     if now - last >= info.get("debounce", 0.3):
-                        # trigger
-                        try:
-                            info["callback"]()
-                        except Exception:
-                            import traceback
-
-                            traceback.print_exc()
+                        callbacks_to_run.append(info["callback"])
                         self._last_trigger[keyset] = now
+        return callbacks_to_run
 
 
 # Module-level singleton
