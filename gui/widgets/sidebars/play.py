@@ -9,7 +9,7 @@ from gui.widgets.editor import EditorFrame
 from gui.widgets.toast import raise_toast
 from gui.widgets.floating import FloatingChartDisplay
 from gui.widgets.playlist_floating import PlaylistFloatingWindow
-from gui.utils import ask_open_file_dialog
+from gui.utils import ask_open_file_dialog, get_root_widget
 from shared.settings import ACCEPTED_FILE_EXTENSIONS
 from shared.utils import (
     is_operation_free,
@@ -721,11 +721,25 @@ class PlayFunctionalFrame(FunctionalFrame):
             beat = 0
         if self.practice_service is None:
             self.practice_service = PracticeService()
+        root = get_root_widget(self)
+
+        def _schedule_update(idx: int) -> None:
+            try:
+                root.after(0, lambda i=idx: self._update_widgets_index(i))
+            except Exception:
+                pass
+
+        def _schedule_stop() -> None:
+            try:
+                root.after(0, self._on_practice_stop)
+            except Exception:
+                pass
+
         started = self.practice_service.start(
             beat_containers=runtime.get_playlist(),
             begin_beat_index=beat,
-            on_update_index=self._update_widgets_index,
-            on_stop=self._on_practice_stop,
+            on_update_index=_schedule_update,
+            on_stop=_schedule_stop,
         )
         if not started:
             self.is_practicing = False
