@@ -1,17 +1,21 @@
 import time
 
-from shared.global_hotkeys import (
-    register_key_down,
-    register_key_up,
-    unregister_key_down,
-    unregister_key_up,
-)
-
 from typing import Callable
+from contextlib import suppress
 
 from chart.constants import KEYBOARD_INDEX_TABLE, ChartKey
 from player.pattern import NoteContainer
 from player.runtime import BeatContainer, FlagBoolean
+from shared.mac_input import native_keyboard_backend_available, register_key_listeners
+from shared.utils import CURRENT_OS, OperatingSystem
+
+if CURRENT_OS != OperatingSystem.MACOS:
+    try:
+        import keyboard
+    except Exception:
+        keyboard = None
+else:
+    keyboard = None
 
 
 class PracticeController:
@@ -35,7 +39,7 @@ class PracticeController:
     waiting_keys: list[tuple[int, ChartKey]] = []  # keys that are waiting to be pressed
     pressed_keys: list[ChartKey] = []  # keys that have been pressed, wait for release
     should_stop: FlagBoolean = FlagBoolean(False)
-    hooks: list[tuple[str, Callable[[], None], Callable[[], None]]] = []
+    hooks: list[object] = []
     on_update_index: Callable[[int], None] | None = None
     on_stop: Callable[[], None] | None = None
 
@@ -95,11 +99,6 @@ class PracticeController:
                     self.waiting_keys.append((beat_index, note.note.keyboard))
             self.remove_note_before_time(self.current_playing_time)
         self.release_all_listeners()
-        # mark as stopped so external checks (is_running) reflect completion
-        try:
-            self.should_stop.modify(True)
-        except Exception:
-            pass
         if self.on_stop is not None:
             self.on_stop()
 
@@ -154,41 +153,51 @@ class PracticeController:
         if key in [k for _, k in self.waiting_keys]:
             if key not in self.pressed_keys:
                 self.pressed_keys.append(key)
-                # Remove only the first matching waiting_key entry to handle repeated keys correctly
-                found = False
-                new_waiting_keys = []
-                for beat_index, k in self.waiting_keys:
-                    if k == key and not found:
-                        found = True  # Skip this entry (remove the first occurrence)
-                    else:
-                        new_waiting_keys.append((beat_index, k))
-                self.waiting_keys = new_waiting_keys
+                self.waiting_keys = [
+                    (beat_index, k) for beat_index, k in self.waiting_keys if k != key
+                ]
 
     def on_key_release(self, key: ChartKey) -> None:
         if key in self.pressed_keys:
             self.pressed_keys.remove(key)
 
     def key_listener_register(self) -> None:
+        if CURRENT_OS == OperatingSystem.MACOS:
+            if not native_keyboard_backend_available():
+                raise RuntimeError(
+                    "Keyboard-based practice mode is unavailable on this platform."
+                )
+            listener = register_key_listeners(
+                KEYBOARD_INDEX_TABLE,
+                self.on_key_press,
+                self.on_key_release,
+            )
+            if listener is not None:
+                self.hooks.append(listener)
+            return
+
+        if keyboard is None:
+            raise RuntimeError("Keyboard package is unavailable on this platform.")
         for key in KEYBOARD_INDEX_TABLE:
-            k = key.lower()
-            def cb_down(k2: ChartKey = key) -> None:
-                self.on_key_press(k2)
-
-            def cb_up(k2: ChartKey = key) -> None:
-                self.on_key_release(k2)
-
-            register_key_down(k, cb_down)
-            register_key_up(k, cb_up)
-            self.hooks.append((k, cb_down, cb_up))
+            self.hooks.append(
+                keyboard.on_press_key(
+                    key.lower(), lambda _, k=key: self.on_key_press(k)
+                )
+            )
+            self.hooks.append(
+                keyboard.on_release_key(
+                    key.lower(), lambda _, k=key: self.on_key_release(k)
+                )
+            )
 
     def release_all_listeners(self) -> None:
-        for item in self.hooks:
-            try:
-                k, cb_down, cb_up = item
-                unregister_key_down(k, cb_down)
-                unregister_key_up(k, cb_up)
-            except Exception:
-                pass
+        for hook in self.hooks:
+            if hasattr(hook, "stop"):
+                with suppress(Exception):
+                    hook.stop()  # type: ignore[attr-defined]
+            elif keyboard is not None:
+                with suppress(KeyError):
+                    keyboard.unhook(hook)
         self.hooks.clear()
 
     def __del__(self):
