@@ -364,6 +364,8 @@ class MainFrame(ctk.CTkFrame):
                     duration=2000,
                     position="center",
                 )
+                # Close sidebar after successful save
+                self.sidebar_frame.on_switch_function_area(None)
             else:
                 # no source path, trigger save as dialog
                 self.save_current_file_as()
@@ -390,6 +392,8 @@ class MainFrame(ctk.CTkFrame):
                 self.editor_frame.rename_tab(old_name, new_name)
                 self.editor_frame.remove_path_from_opened(old_path)
                 self.editor_frame.add_path_to_opened(new_path)
+                # Close sidebar after successful save
+                self.sidebar_frame.on_switch_function_area(None)
 
     def handle_new_file(self) -> None:
         self.editor_frame.handle_new_file()
