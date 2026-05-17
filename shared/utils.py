@@ -48,6 +48,18 @@ def get_operating_system() -> OperatingSystem:
 CURRENT_OS = get_operating_system()
 
 
+def supports_keyboard_global_hooks() -> bool:
+    """Return whether the keyboard package is safe to use for global hooks."""
+    if CURRENT_OS == OperatingSystem.MACOS:
+        try:
+            from shared.mac_input import native_keyboard_backend_available
+
+            return native_keyboard_backend_available()
+        except Exception:
+            return False
+    return True
+
+
 def check_admin_privileges() -> bool:
     """Check if the current process has administrative privileges."""
     try:

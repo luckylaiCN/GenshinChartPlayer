@@ -1,12 +1,19 @@
 import time
 import customtkinter as ctk
-import keyboard
-import threading
 
 from typing import Callable, Optional
+from typing import Any, Callable, Optional
+
+import threading
 
 from gui.theme import curr_theme
 from gui.utils import get_root_widget, translate_tkinter_bind_to_hotkey
+from shared.mac_input import native_keyboard_backend_available, register_hotkey
+from shared.utils import CURRENT_OS, OperatingSystem
+
+keyboard: Any = None
+if CURRENT_OS != OperatingSystem.MACOS:
+    import keyboard
 
 
 class MenuBar(ctk.CTkFrame):
@@ -31,17 +38,17 @@ class Menu(ctk.CTkFrame):
         False  # menu should close only when the mouse focus was on it and then lost
     )
     popup_menu: ctk.CTkFrame
-    _command: Callable | None = None
+    _command: Callable[..., object] | None = None
     parent_menu: Optional["Menu"] = None
     hot_key_name: str = ""
-    _hook: Optional[Callable[[], None]] = None
+    _hook: object | None = None
 
     def __init__(
         self,
         master=None,
         menu_name: str = "",
         hotkey: str = "",
-        command: Callable | None = None,
+        command: Callable[..., object] | None = None,
         is_super_command: bool = False,  # use keyboard to handle this command
         **kwargs,
     ):
@@ -76,12 +83,20 @@ class Menu(ctk.CTkFrame):
                 raise ValueError("Hotkeys can only be registered for sub-menus")
             self.hot_key_name = translate_tkinter_bind_to_hotkey(hotkey)
             if is_super_command:
-                # self._hook = keyboard.add_hotkey(
-                #     self.hot_key_name.lower(),
-                #     lambda: self._command() if self._command is not None else None,
-                # )
-                threading.Thread(target=self._hot_key_listener, daemon=True).start()
-                # so what is the problem with keyboard module hotkey registration?
+                if CURRENT_OS == OperatingSystem.MACOS and native_keyboard_backend_available():
+                    self._hook = register_hotkey(
+                        hotkey,
+                        lambda: self._command()
+                        if self._command is not None
+                        else None,
+                    )
+                else:
+                    # self._hook = keyboard.add_hotkey(
+                    #     self.hot_key_name.lower(),
+                    #     lambda: self._command() if self._command is not None else None,
+                    # )
+                    threading.Thread(target=self._hot_key_listener, daemon=True).start()
+                    # so what is the problem with keyboard module hotkey registration?
             else:
                 # register hotkey to open this menu
                 root = get_root_widget(self)
@@ -97,6 +112,8 @@ class Menu(ctk.CTkFrame):
         #     self._reupdate_hook()
 
     def _hot_key_listener(self):
+        if CURRENT_OS == OperatingSystem.MACOS:
+            return
         time.sleep(3)
         while self.winfo_exists():
             if self.hot_key_name:

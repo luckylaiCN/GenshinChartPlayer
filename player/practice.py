@@ -1,13 +1,21 @@
 import time
 
-import keyboard
-
 from typing import Callable
 from contextlib import suppress
 
 from chart.constants import KEYBOARD_INDEX_TABLE, ChartKey
 from player.pattern import NoteContainer
 from player.runtime import BeatContainer, FlagBoolean
+from shared.mac_input import native_keyboard_backend_available, register_key_listeners
+from shared.utils import CURRENT_OS, OperatingSystem
+
+if CURRENT_OS != OperatingSystem.MACOS:
+    try:
+        import keyboard
+    except Exception:
+        keyboard = None
+else:
+    keyboard = None
 
 
 class PracticeController:
@@ -31,7 +39,7 @@ class PracticeController:
     waiting_keys: list[tuple[int, ChartKey]] = []  # keys that are waiting to be pressed
     pressed_keys: list[ChartKey] = []  # keys that have been pressed, wait for release
     should_stop: FlagBoolean = FlagBoolean(False)
-    hooks: list[Callable[[], None]] = []
+    hooks: list[object] = []
     on_update_index: Callable[[int], None] | None = None
     on_stop: Callable[[], None] | None = None
 
@@ -154,6 +162,22 @@ class PracticeController:
             self.pressed_keys.remove(key)
 
     def key_listener_register(self) -> None:
+        if CURRENT_OS == OperatingSystem.MACOS:
+            if not native_keyboard_backend_available():
+                raise RuntimeError(
+                    "Keyboard-based practice mode is unavailable on this platform."
+                )
+            listener = register_key_listeners(
+                KEYBOARD_INDEX_TABLE,
+                self.on_key_press,
+                self.on_key_release,
+            )
+            if listener is not None:
+                self.hooks.append(listener)
+            return
+
+        if keyboard is None:
+            raise RuntimeError("Keyboard package is unavailable on this platform.")
         for key in KEYBOARD_INDEX_TABLE:
             self.hooks.append(
                 keyboard.on_press_key(
@@ -168,8 +192,12 @@ class PracticeController:
 
     def release_all_listeners(self) -> None:
         for hook in self.hooks:
-            with suppress(KeyError):
-                keyboard.unhook(hook)
+            if hasattr(hook, "stop"):
+                with suppress(Exception):
+                    hook.stop()  # type: ignore[attr-defined]
+            elif keyboard is not None:
+                with suppress(KeyError):
+                    keyboard.unhook(hook)
         self.hooks.clear()
 
     def __del__(self):
