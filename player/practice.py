@@ -1,6 +1,6 @@
 import time
 
-from typing import Callable
+from typing import Callable, Any
 from contextlib import suppress
 
 from chart.constants import KEYBOARD_INDEX_TABLE, ChartKey
@@ -39,7 +39,7 @@ class PracticeController:
     waiting_keys: list[tuple[int, ChartKey]] = []  # keys that are waiting to be pressed
     pressed_keys: list[ChartKey] = []  # keys that have been pressed, wait for release
     should_stop: FlagBoolean = FlagBoolean(False)
-    hooks: list[object] = []
+    hooks: list[Any] = []
     on_update_index: Callable[[int], None] | None = None
     on_stop: Callable[[], None] | None = None
 
@@ -99,6 +99,7 @@ class PracticeController:
                     self.waiting_keys.append((beat_index, note.note.keyboard))
             self.remove_note_before_time(self.current_playing_time)
         self.release_all_listeners()
+        self.should_stop.modify(True)
         if self.on_stop is not None:
             self.on_stop()
 
@@ -149,7 +150,9 @@ class PracticeController:
             if self.on_update_index is not None:
                 self.on_update_index(self.current_playing_beat_index)
 
-    def on_key_press(self, key: ChartKey) -> None:
+    def on_key_press(self, key: str) -> None:
+        if key not in KEYBOARD_INDEX_TABLE:
+            return
         if key in [k for _, k in self.waiting_keys]:
             if key not in self.pressed_keys:
                 self.pressed_keys.append(key)
@@ -157,7 +160,9 @@ class PracticeController:
                     (beat_index, k) for beat_index, k in self.waiting_keys if k != key
                 ]
 
-    def on_key_release(self, key: ChartKey) -> None:
+    def on_key_release(self, key: str) -> None:
+        if key not in KEYBOARD_INDEX_TABLE:
+            return
         if key in self.pressed_keys:
             self.pressed_keys.remove(key)
 

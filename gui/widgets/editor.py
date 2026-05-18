@@ -305,15 +305,12 @@ class MultipleFileTabFrame(ctk.CTkTabview):
             if get_operation_state() == OperationLockState.PRACTICING:
                 # TODO: practice mode handling.
                 pass
-        tab_name = tab_name or self.get()
+        tab_name = self._resolve_current_tab_name(tab_name)
+        if tab_name is None:
+            return
         try:
             tab_index = self.index(tab_name)
         except ValueError:
-            # overwrite to real tab name. This exception happens because the tab is renamed
-            #   but the close button command is not updated accordingly,
-            #   which is a design mistake but can be tolerated for now.
-            tab_name = self.get()
-            tab_index = self.index(tab_name)
             return
         auto_switch_index = (
             tab_index - 1
@@ -376,6 +373,27 @@ class MultipleFileTabFrame(ctk.CTkTabview):
                 return f
         return None
 
+    def _resolve_current_tab_name(self, tab_name: str | None) -> str | None:
+        if tab_name is None:
+            return self.get()
+
+        current_tabs = set(getattr(self._segmented_button, "_value_list", []))
+        if tab_name in current_tabs:
+            return tab_name
+
+        for file_tab in self.files:
+            if file_tab.internal_id == tab_name:
+                return file_tab.tab_identifier
+
+        _, _, internal_id = tab_name.rpartition("_")
+        if internal_id == "":
+            return None
+
+        for file_tab in self.files:
+            if file_tab.internal_id == internal_id:
+                return file_tab.tab_identifier
+        return None
+
     def add_file_tab(self, file_tab: FileTab):
         tab_name = file_tab.tab_identifier
         self.add(tab_name)
@@ -392,10 +410,11 @@ class MultipleFileTabFrame(ctk.CTkTabview):
             width=20,
             height=20,
             fg_color=curr_theme.ERROR_COLOR,
-            command=lambda tn=tab_name: self.on_close_tab(tn),
+            command=lambda tab_id=file_tab.internal_id: self.on_close_tab(tab_id),
         )
         # place close button at top right corner
         close_button.place(relx=1.0, x=-10, y=0, anchor="ne")
+        close_button.lift()
 
         # text area
         text_area = NumberedTextArea(
@@ -970,6 +989,10 @@ class EditorFrame(ctk.CTkFrame):
 
     def rename_tab(self, old_name: str, new_name: str) -> None:
         self.text_areas.rename(old_name, new_name)
+        if old_name in self.text_areas.text_areas:
+            self.text_areas.text_areas[new_name] = self.text_areas.text_areas.pop(old_name)
+            if self.text_areas.curr_text_area is self.text_areas.text_areas[new_name]:
+                self.text_areas.curr_text_area = self.text_areas.text_areas[new_name]
         self.text_areas.set(new_name)
 
     def remove_path_from_opened(self, path: str | None) -> None:

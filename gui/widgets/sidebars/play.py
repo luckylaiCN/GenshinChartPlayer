@@ -274,7 +274,6 @@ class PlayFunctionalFrame(FunctionalFrame):
             self._pl_stop_playback(mute=True)
         next_idx = self.playlist.get_next_index()
         if next_idx >= 0:
-            self.playlist.set_current(next_idx)
             self.playlist_selected_index = next_idx
             self._pl_rebuild_list()
             if was_playing:
@@ -288,7 +287,6 @@ class PlayFunctionalFrame(FunctionalFrame):
             self._pl_stop_playback(mute=True)
         prev_idx = self.playlist.get_prev_index()
         if prev_idx >= 0:
-            self.playlist.set_current(prev_idx)
             self.playlist_selected_index = prev_idx
             self._pl_rebuild_list()
             if was_playing:
@@ -301,7 +299,8 @@ class PlayFunctionalFrame(FunctionalFrame):
         if self.floating_display is None or not self.floating_display.alive.get():
             return
         current = self.playlist.current_entry
-        next_idx = self.playlist.get_next_index()
+        # Only preview next track for UI; do not consume playlist queue here.
+        next_idx = self.playlist.peek_next_index()
         if next_idx >= 0 and next_idx != self.playlist.current_index:
             next_entry = self.playlist.entries[next_idx]
             self.floating_display.set_playlist_track_info(
@@ -421,7 +420,6 @@ class PlayFunctionalFrame(FunctionalFrame):
         if next_idx < 0:
             self._pl_rebuild_list()
             return
-        self.playlist.set_current(next_idx)
         self.playlist_selected_index = next_idx
         self._pl_rebuild_list()
         self._pl_start_playback()
@@ -765,6 +763,8 @@ class PlayFunctionalFrame(FunctionalFrame):
         if self.binded_editor is not None:
             self.binded_editor.modify_editable(True)
         self.is_practicing = False
+        if self.practice_service is not None:
+            self.practice_service.controller = None
         self.pratice_mode_button.configure(text="Practice Mode")
         release_operation()
 

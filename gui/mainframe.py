@@ -328,6 +328,10 @@ class MainFrame(ctk.CTkFrame):
     def open_file_dialog(self) -> None:
         file_path = ask_open_file_dialog(ACCEPTED_FILE_EXTENSIONS)
         if file_path is not None:
+            if isinstance(file_path, list):
+                if not file_path:
+                    return
+                file_path = file_path[0]
             self.editor_frame.handle_open_file(file_path)
 
     def create_widgets(self):
@@ -364,8 +368,6 @@ class MainFrame(ctk.CTkFrame):
                     duration=2000,
                     position="center",
                 )
-                # Close sidebar after successful save
-                self.sidebar_frame.on_switch_function_area(None)
             else:
                 # no source path, trigger save as dialog
                 self.save_current_file_as()
@@ -392,8 +394,6 @@ class MainFrame(ctk.CTkFrame):
                 self.editor_frame.rename_tab(old_name, new_name)
                 self.editor_frame.remove_path_from_opened(old_path)
                 self.editor_frame.add_path_to_opened(new_path)
-                # Close sidebar after successful save
-                self.sidebar_frame.on_switch_function_area(None)
 
     def handle_new_file(self) -> None:
         self.editor_frame.handle_new_file()
@@ -502,6 +502,10 @@ class MainFrame(ctk.CTkFrame):
     def handle_convert_from_musicxml(self) -> None:
         file_path = ask_open_file_dialog(["*.xml", "*.mxl", "*.musicxml", "*.mid"])
         if file_path is not None:
+            if isinstance(file_path, list):
+                if not file_path:
+                    return
+                file_path = file_path[0]
             resp = self.editor_frame.load_from_score(file_path)
             if not resp:
                 raise_toast(

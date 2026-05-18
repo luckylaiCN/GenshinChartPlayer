@@ -162,6 +162,7 @@ class PlaylistFloatingWindow(ctk.CTkToplevel):
             return
         try:
             self.play_frame.playlist.play_mode = PlayMode(self.mode_var.get())
+            self.play_frame.playlist._rebuild_queue()
         except ValueError:
             pass
 
@@ -257,7 +258,14 @@ class PlaylistFloatingWindow(ctk.CTkToplevel):
 
         entry = playlist.current_entry
         if entry and self.play_frame._playlist_playing:
-            self.pl_current_label.configure(text=f"Now: {entry.title}")
+            next_idx = playlist.peek_next_index()
+            if next_idx >= 0:
+                next_entry = playlist.entries[next_idx]
+                self.pl_current_label.configure(
+                    text=f"Now: {entry.title}  →  Next: {next_entry.title}"
+                )
+            else:
+                self.pl_current_label.configure(text=f"Now: {entry.title}")
         else:
             self.pl_current_label.configure(text="")
 

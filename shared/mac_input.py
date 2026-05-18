@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
-from typing import Callable, Any
+from typing import Callable, Any, Sequence
 
 try:
     from AppKit import (
@@ -186,7 +186,7 @@ def register_hotkey(
 
 
 def register_key_listeners(
-    keys: list[str],
+    keys: Sequence[str],
     on_press: Callable[[str], None],
     on_release: Callable[[str], None],
 ) -> NativeMonitorHandle | None:
