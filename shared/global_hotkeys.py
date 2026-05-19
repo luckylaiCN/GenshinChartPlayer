@@ -8,6 +8,8 @@ from pynput import keyboard
 from pynput.keyboard import Key, KeyCode
 import traceback
 
+from shared.utils import dispatch_to_main_thread
+
 
 def _normalize_key(key) -> str:
     if isinstance(key, KeyCode):
@@ -40,13 +42,7 @@ class GlobalHotkeyManager:
     @staticmethod
     def _dispatch_callbacks(callbacks: list[Callable[[], None]]) -> None:
         for callback in callbacks:
-            def run(cb: Callable[[], None] = callback) -> None:
-                try:
-                    cb()
-                except Exception:
-                    traceback.print_exc()
-
-            threading.Thread(target=run, daemon=True).start()
+            dispatch_to_main_thread(callback)
 
     def start(self):
         with self._lock:

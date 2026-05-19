@@ -3,7 +3,7 @@ import customtkinter as ctk
 from typing import TypedDict
 
 from gui.mainframe import MainFrame
-from shared.utils import ask_for_admin_privileges, IS_ADMIN
+from shared.utils import ask_for_admin_privileges, IS_ADMIN, install_main_thread_dispatcher
 
 
 class AppProps(TypedDict):
@@ -17,6 +17,7 @@ def run_app(props: AppProps):
     app = ctk.CTk()
     app.title("Genshin Chart Player")
     app.geometry("1200x800")
+    install_main_thread_dispatcher(app)
 
     main_frame = MainFrame(master=app)
     main_frame.pack(fill="both", expand=True)

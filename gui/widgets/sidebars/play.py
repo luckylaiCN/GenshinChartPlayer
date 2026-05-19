@@ -654,7 +654,7 @@ class PlayFunctionalFrame(FunctionalFrame):
         return False
 
     def enable_floating_display(self) -> None:
-        if self.floating_display is None or not self.floating_display.alive.get():
+        if self.floating_display is None or not self.floating_display.winfo_exists():
             rt = self._playlist_runtime if self._playlist_playing else (
                 self.binded_editor.runtime if self.binded_editor else None
             )
@@ -665,6 +665,14 @@ class PlayFunctionalFrame(FunctionalFrame):
             )
             self.floating_display.geometry("600x100")
             self.floating_display.center_on_screen()
+        else:
+            rt = self._playlist_runtime if self._playlist_playing else (
+                self.binded_editor.runtime if self.binded_editor else None
+            )
+            if not self.floating_display.alive.get():
+                self.floating_display.alive.modify(True)
+            if rt is not None:
+                self.floating_display.set_runtime(rt)
         self.floating_display.deiconify()
         self.floating_display.lift()
         self.floating_display.auto_justify_window()

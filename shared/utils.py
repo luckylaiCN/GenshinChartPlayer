@@ -3,8 +3,12 @@ import sys
 import ctypes
 import uuid
 import hashlib
+import queue
+import threading
+import traceback
 
 from enum import Enum
+from typing import Callable, Protocol
 
 PROJECT_ROOT: str
 
@@ -25,6 +29,57 @@ def rpath(*paths: str) -> str:
 
 
 AUDIO_DIR = rpath("audio")
+
+
+class _MainThreadRoot(Protocol):
+    def after(self, delay_ms: int, callback: Callable[..., object] | None = None, *args: object) -> object: ...
+
+
+_main_thread_callbacks: queue.Queue[Callable[[], object | None]] = queue.Queue()
+_main_thread_root: _MainThreadRoot | None = None
+_main_thread_dispatch_interval_ms = 10
+_main_thread_dispatch_started = False
+
+
+def _drain_main_thread_callbacks() -> None:
+    global _main_thread_dispatch_started
+    root = _main_thread_root
+    if root is None:
+        _main_thread_dispatch_started = False
+        return
+
+    while True:
+        try:
+            callback = _main_thread_callbacks.get_nowait()
+        except queue.Empty:
+            break
+
+        try:
+            callback()
+        except Exception:
+            traceback.print_exc()
+
+    try:
+        root.after(_main_thread_dispatch_interval_ms, _drain_main_thread_callbacks)
+    except Exception:
+        _main_thread_dispatch_started = False
+
+
+def install_main_thread_dispatcher(root: _MainThreadRoot, interval_ms: int = 10) -> None:
+    global _main_thread_root, _main_thread_dispatch_interval_ms, _main_thread_dispatch_started
+    _main_thread_root = root
+    _main_thread_dispatch_interval_ms = max(1, interval_ms)
+    if _main_thread_dispatch_started:
+        return
+    _main_thread_dispatch_started = True
+    root.after(0, _drain_main_thread_callbacks)
+
+
+def dispatch_to_main_thread(callback: Callable[[], object | None]) -> None:
+    if _main_thread_root is None:
+        callback()
+        return
+    _main_thread_callbacks.put(callback)
 
 
 class OperatingSystem(Enum):
@@ -82,7 +137,7 @@ def ask_for_admin_privileges() -> None:
         import ctypes
 
         params = " ".join([f'"{arg}"' for arg in sys.argv])
-        ctypes.windll.shell32.ShellExecuteW(
+        ctypes.windll.shell32.ShellExecuteW(  # type: ignore
             None, "runas", sys.executable, params, None, 1
         )
         sys.exit(0)
