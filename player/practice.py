@@ -172,13 +172,17 @@ class PracticeController:
                 raise RuntimeError(
                     "Keyboard-based practice mode is unavailable on this platform."
                 )
+            print(f"[practice] registering macOS key listeners: {KEYBOARD_INDEX_TABLE}")
             listener = register_key_listeners(
                 KEYBOARD_INDEX_TABLE,
                 self.on_key_press,
                 self.on_key_release,
             )
             if listener is not None:
+                print("[practice] macOS key listeners registered")
                 self.hooks.append(listener)
+            else:
+                print("[practice] macOS key listeners were not created")
             return
 
         if keyboard is None:
